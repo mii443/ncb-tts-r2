@@ -1,0 +1,32 @@
+[package]
+name = "ncb-tts-r2"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_json = "1.0"
+serde = "1.0"
+toml = "0.5"
+gcp_auth = "0.5.0"
+reqwest = { version = "0.11", features = ["json"] }
+base64 = "0.13"
+async-trait = "0.1.57"
+
+[dependencies.uuid]
+version = "0.8"
+features = ["serde", "v4"]
+
+[dependencies.songbird]
+version = "0.2.0"
+features = ["builtin-queue"]
+
+[dependencies.serenity]
+version = "0.10.9"
+features = ["builder", "cache", "client", "gateway", "model", "utils", "unstable_discord_api", "collector", "rustls_backend", "framework", "voice"]
+
+
+[dependencies.tokio]
+version = "1.0"
+features = ["macros", "rt-multi-thread"]

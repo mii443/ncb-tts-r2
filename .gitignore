@@ -1,0 +1,6 @@
+Cargo.lock
+/target
+config.toml
+credentials.json
+/audio
+*.mp3
