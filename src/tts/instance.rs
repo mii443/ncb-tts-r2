@@ -10,7 +10,6 @@ pub struct TTSInstance {
 }
 
 impl TTSInstance {
-
     /// Synthesize text to speech and send it to the voice channel.
     ///
     /// Example:
