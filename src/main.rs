@@ -1,7 +1,8 @@
 use std::{sync::Arc, collections::HashMap};
 
 use config::Config;
-use data::{TTSData, TTSClientData};
+use data::{TTSData, TTSClientData, DatabaseClientData};
+use database::database::Database;
 use event_handler::Handler;
 use tts::gcp_tts::gcp_tts::TTS;
 use serenity::{
@@ -16,6 +17,7 @@ mod event_handler;
 mod tts;
 mod implement;
 mod data;
+mod database;
 
 /// Create discord client
 ///
@@ -55,11 +57,18 @@ async fn main() {
         Err(err) => panic!("{}", err)
     };
 
+    let database_client = {
+        let redis_client = redis::Client::open(config.redis_url).unwrap();
+        let con = redis_client.get_connection().unwrap();
+        Database::new(con)
+    };
+
     // Create TTS storage
     {
         let mut data = client.data.write().await;
         data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
         data.insert::<TTSClientData>(Arc::new(Mutex::new(tts)));
+        data.insert::<DatabaseClientData>(Arc::new(Mutex::new(database_client)));
     }
 
     // Run client

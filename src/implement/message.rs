@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serenity::{prelude::Context, model::prelude::Message};
 
 use crate::{
-    data::TTSClientData,
+    data::{TTSClientData, DatabaseClientData},
     tts::{
         instance::TTSInstance,
         message::TTSMessage,
@@ -39,16 +39,18 @@ impl TTSMessage for Message {
         let storage = data_read.get::<TTSClientData>().expect("Cannot get TTSClientStorage").clone();
         let storage = storage.lock().await;
 
+        let config = {
+            let database = data_read.get::<DatabaseClientData>().expect("Cannot get DatabaseClientData").clone();
+            let mut database = database.lock().await;
+            database.get_user_config_or_default(self.author.id.0).await.unwrap().unwrap()
+        };
+
         let audio = storage.synthesize(SynthesizeRequest {
             input: SynthesisInput {
                 text: None,
                 ssml: Some(text)
             },
-            voice: VoiceSelectionParams {
-                languageCode: String::from("ja-JP"),
-                name: String::from("ja-JP-Wavenet-B"),
-                ssmlGender: String::from("neutral")
-            },
+            voice: config.gcp_tts_voice.unwrap(),
             audioConfig: AudioConfig {
                 audioEncoding: String::from("mp3"),
                 speakingRate: 1.2f32,

@@ -93,7 +93,13 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, message: Message) {
-        let guild_id = message.guild(&ctx.cache).await.unwrap().id;
+        let guild_id = message.guild(&ctx.cache).await;
+
+        if let None = guild_id {
+            return;
+        }
+
+        let guild_id = guild_id.unwrap().id;
 
         let storage_lock = {
             let data_read = ctx.data.read().await;
@@ -115,7 +121,7 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
 
-        let guild_id = GuildId(696782998799909024);
+        let guild_id = GuildId(660046656934248460);
 
         let commands = GuildId::set_application_commands(&guild_id, &ctx.http, |commands| {
             commands.create_application_command(|command| {
