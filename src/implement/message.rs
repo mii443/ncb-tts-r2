@@ -9,7 +9,7 @@ use crate::{
         instance::TTSInstance,
         message::TTSMessage,
         gcp_tts::structs::{
-            audio_config::AudioConfig, voice_selection_params::VoiceSelectionParams, synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest
+            audio_config::AudioConfig, synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest
         }
     },
 };
@@ -21,7 +21,13 @@ impl TTSMessage for Message {
             if before_message.author.id == self.author.id {
                 self.content.clone()
             } else {
-                format!("<speak>{} さんの発言<break time=\"200ms\"/>{}</speak>", self.author.name, self.content)
+                let member = self.member.clone();
+                let name = if let Some(member) = member {
+                    member.nick.unwrap_or(self.author.name.clone())
+                } else {
+                    self.author.name.clone()
+                };
+                format!("<speak>{} さんの発言<break time=\"200ms\"/>{}</speak>", name, self.content)
             }
         } else {
             self.content.clone()
