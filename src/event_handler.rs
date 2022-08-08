@@ -1,4 +1,4 @@
-use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message}, framework::standard::macros::group};
+use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::Member, voice::VoiceState}, framework::standard::macros::group};
 use crate::{data::TTSData, tts::instance::TTSInstance};
 
 #[group]
@@ -92,6 +92,61 @@ impl EventHandler for Handler {
         }
     }
 
+    async fn voice_state_update(
+        &self,
+        ctx: Context,
+        guild_id: Option<GuildId>,
+        old: Option<VoiceState>,
+        new: VoiceState,
+    ) {
+        let guild_id = guild_id.unwrap();
+
+        let storage_lock = {
+            let data_read = ctx.data.read().await;
+            data_read.get::<TTSData>().expect("Cannot get TTSStorage").clone()
+        };
+
+        {
+            let mut storage = storage_lock.write().await;
+            if !storage.contains_key(&guild_id) {
+                return;
+            }
+
+            let instance = storage.get_mut(&guild_id).unwrap();
+
+            let mut message: Option<String> = None;
+
+            match old {
+                Some(old) => {
+                    match (old.channel_id, new.channel_id) {
+                        (Some(old_channel_id), Some(new_channel_id)) => {
+                            if old_channel_id == new_channel_id {
+                                return;
+                            }
+                            if old_channel_id != new_channel_id {
+                                if instance.voice_channel == new_channel_id {
+                                    message = Some(String::from(""));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                None => {
+                    match new.channel_id {
+                        Some(channel_id) => {
+
+                        }
+                        None => {
+                            return;
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
     async fn message(&self, ctx: Context, message: Message) {
         let guild_id = message.guild(&ctx.cache).await;
 
@@ -114,6 +169,11 @@ impl EventHandler for Handler {
 
             let instance = storage.get_mut(&guild_id).unwrap();
 
+            if instance.text_channel.0 != message.channel_id.0 {
+                return;
+            }
+
+            println!("READ: {:?}", message);
             instance.read(message, &ctx).await;
         }
     }
@@ -121,7 +181,7 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
 
-        let guild_id = GuildId(660046656934248460);
+        let guild_id = GuildId(949296300099268668);
 
         let commands = GuildId::set_application_commands(&guild_id, &ctx.http, |commands| {
             commands.create_application_command(|command| {
