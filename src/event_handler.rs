@@ -1,5 +1,5 @@
 use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::Member, voice::VoiceState}, framework::standard::macros::group};
-use crate::{data::TTSData, tts::instance::TTSInstance};
+use crate::{data::TTSData, tts::{instance::TTSInstance, message::AnnounceMessage}, implement::member_name::ReadName};
 
 #[group]
 struct Test;
@@ -125,17 +125,39 @@ impl EventHandler for Handler {
                             }
                             if old_channel_id != new_channel_id {
                                 if instance.voice_channel == new_channel_id {
-                                    message = Some(String::from(""));
+                                    message = Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name()));
                                 }
+                            } else if old_channel_id == instance.voice_channel && new_channel_id != instance.voice_channel {
+                                message = Some(format!("{} さんが通話から退出しました", new.member.unwrap().read_name()));
+                            } else {
+                                return;
                             }
                         }
-                        _ => {}
+                        (Some(old_channel_id), None) => {
+                            if old_channel_id == instance.voice_channel {
+                                message = Some(format!("{} さんが通話から退出しました", new.member.unwrap().read_name()));
+                            } else {
+                                return;
+                            }
+                        }
+                        (None, Some(new_channel_id)) => {
+                            if new_channel_id == instance.voice_channel {
+                                message = Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name()));
+                            } else {
+                                return;
+                            }
+                        }
+                        _ => {
+                            return;
+                        }
                     }
                 }
                 None => {
                     match new.channel_id {
                         Some(channel_id) => {
-
+                            if instance.voice_channel == channel_id {
+                                message = Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name()));
+                            }
                         }
                         None => {
                             return;
@@ -144,10 +166,20 @@ impl EventHandler for Handler {
                 }
             }
 
+            if let Some(message) = message {
+                instance.read(AnnounceMessage {
+                    message
+                }, &ctx).await;
+            }
         }
     }
 
     async fn message(&self, ctx: Context, message: Message) {
+
+        if message.author.bot {
+            return;
+        }
+
         let guild_id = message.guild(&ctx.cache).await;
 
         if let None = guild_id {

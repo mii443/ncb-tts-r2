@@ -36,10 +36,11 @@ pub struct AnnounceMessage {
 impl TTSMessage for AnnounceMessage {
     async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
         instance.before_message = None;
-        self.message.clone()
+        format!(r#"<speak>アナウンス<break time="200ms"/>{}</speak>"#, self.message)
     }
 
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+        let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
         let storage = data_read.get::<TTSClientData>().expect("Cannot get TTSClientStorage").clone();
         let mut storage = storage.lock().await;
@@ -47,7 +48,7 @@ impl TTSMessage for AnnounceMessage {
         let audio = storage.synthesize(SynthesizeRequest {
             input: SynthesisInput {
                 text: None,
-                ssml: Some(self.message.clone())
+                ssml: Some(text)
             },
             voice: VoiceSelectionParams {
                 languageCode: String::from("ja-JP"),

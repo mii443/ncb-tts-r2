@@ -30,7 +30,13 @@ impl TTSMessage for Message {
                 format!("<speak>{} さんの発言<break time=\"200ms\"/>{}</speak>", name, self.content)
             }
         } else {
-            self.content.clone()
+            let member = self.member.clone();
+            let name = if let Some(member) = member {
+                member.nick.unwrap_or(self.author.name.clone())
+            } else {
+                self.author.name.clone()
+            };
+            format!("<speak>{} さんの発言<break time=\"200ms\"/>{}</speak>", name, self.content)
         };
 
         instance.before_message = Some(self.clone());
