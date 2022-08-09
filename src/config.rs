@@ -6,4 +6,5 @@ pub struct Config {
     pub token: String,
     pub application_id: u64,
     pub redis_url: String,
+    pub voicevox_key: String
 }
