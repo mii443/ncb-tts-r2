@@ -46,7 +46,6 @@ impl TTSMessage for Message {
 
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
         let text = self.parse(instance, ctx).await;
-        println!("Parsed: {:?}", text);
 
         let data_read = ctx.data.read().await;
         let storage = data_read.get::<TTSClientData>().expect("Cannot get GCP TTSClientStorage").clone();

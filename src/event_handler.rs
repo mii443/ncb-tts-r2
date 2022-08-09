@@ -275,7 +275,6 @@ impl EventHandler for Handler {
                 return;
             }
 
-            println!("READ: {:?}", message);
             instance.read(message, &ctx).await;
         }
     }
