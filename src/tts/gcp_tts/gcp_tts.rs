@@ -54,7 +54,7 @@ impl TTS {
     /// }).await.unwrap();
     /// ```
     pub async fn synthesize(&mut self, request: SynthesizeRequest) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        self.update_token();
+        self.update_token().await.unwrap();
         let client = reqwest::Client::new();
         match client.post("https://texttospeech.googleapis.com/v1/text:synthesize")
             .header(reqwest::header::CONTENT_TYPE, "application/json")
