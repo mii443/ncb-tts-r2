@@ -45,7 +45,7 @@ impl TTSMessage for AnnounceMessage {
         let storage = data_read.get::<TTSClientData>().expect("Cannot get TTSClientStorage").clone();
         let mut storage = storage.lock().await;
 
-        let audio = storage.synthesize(SynthesizeRequest {
+        let audio = storage.0.synthesize(SynthesizeRequest {
             input: SynthesisInput {
                 text: None,
                 ssml: Some(text)

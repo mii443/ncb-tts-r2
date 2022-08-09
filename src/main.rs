@@ -4,7 +4,7 @@ use config::Config;
 use data::{TTSData, TTSClientData, DatabaseClientData};
 use database::database::Database;
 use event_handler::Handler;
-use tts::gcp_tts::gcp_tts::TTS;
+use tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX};
 use serenity::{
     client::{Client, bridge::gateway::GatewayIntents},
     framework::StandardFramework, prelude::RwLock, futures::lock::Mutex
@@ -51,11 +51,13 @@ async fn main() {
     // Create discord client
     let mut client = create_client(&config.prefix, &config.token, config.application_id).await.expect("Err creating client");
 
-    // Create TTS client
+    // Create GCP TTS client
     let tts = match TTS::new("./credentials.json".to_string()).await {
         Ok(tts) => tts,
         Err(err) => panic!("{}", err)
     };
+
+    let voicevox = VOICEVOX::new(config.voicevox_key);
 
     let database_client = {
         let redis_client = redis::Client::open(config.redis_url).unwrap();
@@ -67,7 +69,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
-        data.insert::<TTSClientData>(Arc::new(Mutex::new(tts)));
+        data.insert::<TTSClientData>(Arc::new(Mutex::new((tts, voicevox))));
         data.insert::<DatabaseClientData>(Arc::new(Mutex::new(database_client)));
     }
 

@@ -10,7 +10,7 @@ use crate::{
         message::TTSMessage,
         gcp_tts::structs::{
             audio_config::AudioConfig, synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest
-        }
+        }, tts_type::{self, TTSType}
     },
 };
 
@@ -27,7 +27,7 @@ impl TTSMessage for Message {
                 } else {
                     self.author.name.clone()
                 };
-                format!("<speak>{} さんの発言<break time=\"200ms\"/>{}</speak>", name, self.content)
+                format!("{} さんの発言<break time=\"200ms\"/>{}", name, self.content)
             }
         } else {
             let member = self.member.clone();
@@ -36,7 +36,7 @@ impl TTSMessage for Message {
             } else {
                 self.author.name.clone()
             };
-            format!("<speak>{} さんの発言<break time=\"200ms\"/>{}</speak>", name, self.content)
+            format!("{} さんの発言<break time=\"200ms\"/>{}", name, self.content)
         };
 
         instance.before_message = Some(self.clone());
@@ -49,8 +49,8 @@ impl TTSMessage for Message {
         println!("Parsed: {:?}", text);
 
         let data_read = ctx.data.read().await;
-        let storage = data_read.get::<TTSClientData>().expect("Cannot get TTSClientStorage").clone();
-        let mut storage = storage.lock().await;
+        let storage = data_read.get::<TTSClientData>().expect("Cannot get GCP TTSClientStorage").clone();
+        let mut tts = storage.lock().await;
 
         let config = {
             let database = data_read.get::<DatabaseClientData>().expect("Cannot get DatabaseClientData").clone();
@@ -58,18 +58,26 @@ impl TTSMessage for Message {
             database.get_user_config_or_default(self.author.id.0).await.unwrap().unwrap()
         };
 
-        let audio = storage.synthesize(SynthesizeRequest {
-            input: SynthesisInput {
-                text: None,
-                ssml: Some(text)
-            },
-            voice: config.gcp_tts_voice.unwrap(),
-            audioConfig: AudioConfig {
-                audioEncoding: String::from("mp3"),
-                speakingRate: 1.2f32,
-                pitch: 1.0f32
+        let audio = match config.tts_type.unwrap_or(TTSType::GCP) {
+            TTSType::GCP => {
+                tts.0.synthesize(SynthesizeRequest {
+                    input: SynthesisInput {
+                        text: None,
+                        ssml: Some(format!("<speak>{}</speak>", text))
+                    },
+                    voice: config.gcp_tts_voice.unwrap(),
+                    audioConfig: AudioConfig {
+                        audioEncoding: String::from("mp3"),
+                        speakingRate: 1.2f32,
+                        pitch: 1.0f32
+                    }
+                }).await.unwrap()
             }
-        }).await.unwrap();
+
+            TTSType::VOICEVOX => {
+                tts.1.synthesize(text.replace("<break time=\"200ms\"/>", "、"), config.voicevox_speaker.unwrap_or(1)).await.unwrap()
+            }
+        };
 
         let uuid = uuid::Uuid::new_v4().to_string();
 

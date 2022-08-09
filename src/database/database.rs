@@ -38,7 +38,8 @@ impl Database {
 
         let config = UserConfig {
             tts_type: Some(voice_type),
-            gcp_tts_voice: Some(voice_selection)
+            gcp_tts_voice: Some(voice_selection),
+            voicevox_speaker: Some(1)
         };
 
         self.connection.set(format!("discord_user:{}", user_id), serde_json::to_string(&config).unwrap())?;
