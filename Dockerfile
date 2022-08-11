@@ -13,6 +13,6 @@ RUN apt-get update \
 && cp /usr/src/ncb-tts-r2/target/release/ncb-tts-r2 /usr/bin/ncb-tts-r2 \
 && mkdir -p /ncb-tts-r2/audio \
 && apt-get purge -y pkg-config wget curl gcc \
-&& rustup self uninstall
+&& rustup self uninstall -y
 WORKDIR /ncb-tts-r2
 CMD ["ncb-tts-r2"]
