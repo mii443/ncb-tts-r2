@@ -1,4 +1,4 @@
-use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::{Member, application_command::{ApplicationCommandOptionType, ApplicationCommandOption}}, voice::VoiceState}, framework::standard::macros::group};
+use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::{Member, application_command::{ApplicationCommandOptionType, ApplicationCommandOption, ApplicationCommand}}, voice::VoiceState}, framework::standard::macros::group};
 use crate::{data::TTSData, tts::{instance::TTSInstance, message::AnnounceMessage}, implement::member_name::ReadName};
 
 #[group]
@@ -281,10 +281,7 @@ impl EventHandler for Handler {
 
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
-
-        let guild_id = GuildId(660046656934248460);
-
-        let commands = GuildId::set_application_commands(&guild_id, &ctx.http, |commands| {
+        let _ = ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
             commands.create_application_command(|command| {
                 command.name("stop")
                     .description("Stop tts")
@@ -295,8 +292,8 @@ impl EventHandler for Handler {
             });
             commands.create_application_command(|command| {
                 command.name("config")
+                    .description("Config")
             })
         }).await;
-        println!("{:?}", commands);
     }
 }
