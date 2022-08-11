@@ -64,8 +64,7 @@ impl TTSMessage for AnnounceMessage {
 
         let uuid = uuid::Uuid::new_v4().to_string();
 
-        let root = option_env!("CARGO_MANIFEST_DIR").unwrap();
-        let path = Path::new(root);
+        let path = env::current_dir().unwrap();
         let file_path = path.join("audio").join(format!("{}.mp3", uuid));
 
         let mut file = File::create(file_path.clone()).unwrap();

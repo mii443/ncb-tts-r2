@@ -1,4 +1,4 @@
-use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::Member, voice::VoiceState}, framework::standard::macros::group};
+use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::{Member, application_command::{ApplicationCommandOptionType, ApplicationCommandOption}}, voice::VoiceState}, framework::standard::macros::group};
 use crate::{data::TTSData, tts::{instance::TTSInstance, message::AnnounceMessage}, implement::member_name::ReadName};
 
 #[group]
@@ -292,6 +292,9 @@ impl EventHandler for Handler {
             commands.create_application_command(|command| {
                 command.name("setup")
                     .description("Setup tts")
+            });
+            commands.create_application_command(|command| {
+                command.name("config")
             })
         }).await;
         println!("{:?}", commands);
