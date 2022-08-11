@@ -1,4 +1,4 @@
-use std::{path::Path, fs::File, io::Write};
+use std::{path::Path, fs::File, io::Write, env};
 
 use async_trait::async_trait;
 use serenity::prelude::Context;
