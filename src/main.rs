@@ -5,6 +5,7 @@ mod implement;
 mod data;
 mod database;
 mod events;
+mod commands;
 
 use std::{sync::Arc, collections::HashMap};
 
