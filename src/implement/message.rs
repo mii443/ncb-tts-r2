@@ -11,16 +11,17 @@ use crate::{
         tts_type::TTSType,
         gcp_tts::structs::{
             audio_config::AudioConfig, synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest
-        }
+        }, validator
     },
 };
 
 #[async_trait]
 impl TTSMessage for Message {
     async fn parse(&self, instance: &mut TTSInstance, _: &Context) -> String {
+        let text = validator::remove_url(self.content.clone());
         let res = if let Some(before_message) = &instance.before_message {
             if before_message.author.id == self.author.id {
-                self.content.clone()
+                text.clone()
             } else {
                 let member = self.member.clone();
                 let name = if let Some(member) = member {
@@ -28,7 +29,7 @@ impl TTSMessage for Message {
                 } else {
                     self.author.name.clone()
                 };
-                format!("{} さんの発言<break time=\"200ms\"/>{}", name, self.content)
+                format!("{} さんの発言<break time=\"200ms\"/>{}", name, text)
             }
         } else {
             let member = self.member.clone();
@@ -37,7 +38,7 @@ impl TTSMessage for Message {
             } else {
                 self.author.name.clone()
             };
-            format!("{} さんの発言<break time=\"200ms\"/>{}", name, self.content)
+            format!("{} さんの発言<break time=\"200ms\"/>{}", name, text)
         };
 
         instance.before_message = Some(self.clone());

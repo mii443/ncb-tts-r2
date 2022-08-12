@@ -3,3 +3,4 @@ pub mod voicevox;
 pub mod message;
 pub mod tts_type;
 pub mod instance;
+pub mod validator;

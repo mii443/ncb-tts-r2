@@ -4,6 +4,7 @@ pub trait VoiceMoveStateTrait {
     fn move_state(&self, old: &Option<VoiceState>, target_channel: ChannelId) -> VoiceMoveState;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VoiceMoveState {
     JOIN,
     LEAVE,

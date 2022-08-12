@@ -58,7 +58,7 @@ pub async fn stop_command(ctx: &Context, command: &ApplicationCommandInteraction
         storage.remove(&guild.id);
     }
 
-    let _handler = manager.leave(guild.id.0).await;
+    let _handler = manager.remove(guild.id.0).await;
 
     command.create_interaction_response(&ctx.http, |f| {
         f.interaction_response_data(|d| {
