@@ -69,7 +69,11 @@ pub async fn setup_command(ctx: &Context, command: &ApplicationCommandInteractio
 
     command.create_interaction_response(&ctx.http, |f| {
         f.interaction_response_data(|d| {
-            d.content("セットアップ完了").flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+            d.create_embed(|e| {
+                e.title("読み上げ (Serenity)")
+                    .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ```", false)
+                    .field("設定コマンド", "`/config`", false)
+            })
         })
     }).await?;
 

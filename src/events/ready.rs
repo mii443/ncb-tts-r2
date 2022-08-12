@@ -1,4 +1,4 @@
-use serenity::{prelude::Context, model::prelude::{Ready, application_command::ApplicationCommand}};
+use serenity::{prelude::Context, model::prelude::{Ready, application_command::ApplicationCommand, GuildId}};
 
 pub async fn ready(ctx: Context, ready: Ready) {
     println!("{} is connected!", ready.user.name);
@@ -17,4 +17,11 @@ pub async fn ready(ctx: Context, ready: Ready) {
                 .description("Config")
         })
     }).await;
+
+    GuildId(949296300099268668).set_application_commands(&ctx.http, |f| {
+        f.create_application_command(|command| {
+            command.name("config")
+                .description("Config")
+        })
+    }).await.unwrap();
 }
