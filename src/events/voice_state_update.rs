@@ -31,26 +31,27 @@ pub async fn voice_state_update(
             _ => None,
         };
 
-        if let Some(message) = message {
-            instance.read(AnnounceMessage {
-                message
-            }, &ctx).await;
-        }
-
-        let storage_lock = {
-            let data_read = ctx.data.read().await;
-            data_read.get::<TTSData>().expect("Cannot get TTSStorage").clone()
-        };
-
-        {
-            let mut storage = storage_lock.write().await;
-            storage.remove(&guild_id);
-        }
-
-        let manager = songbird::get(&ctx).await.expect("Cannot get songbird client.").clone();
-
         if voice_move_state == VoiceMoveState::LEAVE {
-            manager.remove(guild_id.0).await.unwrap();
+            let mut del_flag = false;
+            for channel in guild_id.channels(&ctx.http).await.unwrap() {
+                if channel.0 == instance.voice_channel {
+                    del_flag = channel.1.members(&ctx.cache).await.unwrap().len() <= 1;
+                }
+            }
+
+            if del_flag {
+                storage.remove(&guild_id);
+
+                let manager = songbird::get(&ctx).await.expect("Cannot get songbird client.").clone();
+
+                manager.remove(guild_id.0).await.unwrap();
+            } else {
+                if let Some(message) = message {
+                    instance.read(AnnounceMessage {
+                        message
+                    }, &ctx).await;
+                }
+            }
         }
     }
 }

@@ -62,7 +62,7 @@ pub async fn stop_command(ctx: &Context, command: &ApplicationCommandInteraction
 
     command.create_interaction_response(&ctx.http, |f| {
         f.interaction_response_data(|d| {
-            d.content("停止しました").flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+            d.content("停止しました")
         })
     }).await?;
 
