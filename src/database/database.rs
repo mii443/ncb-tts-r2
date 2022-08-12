@@ -4,16 +4,16 @@ use super::user_config::UserConfig;
 use redis::Commands;
 
 pub struct Database {
-    pub connection: redis::Connection
+    pub client: redis::Client
 }
 
 impl Database {
-    pub fn new(connection: redis::Connection) -> Self {
-        Self { connection }
+    pub fn new(client: redis::Client) -> Self {
+        Self { client }
     }
 
     pub async fn get_user_config(&mut self, user_id: u64) -> redis::RedisResult<Option<UserConfig>> {
-        let config: String = self.connection.get(format!("discord_user:{}", user_id)).unwrap_or_default();
+        let config: String = self.client.get_connection().unwrap().get(format!("discord_user:{}", user_id)).unwrap_or_default();
 
         match serde_json::from_str(&config) {
             Ok(config) => Ok(Some(config)),
@@ -23,7 +23,7 @@ impl Database {
 
     pub async fn set_user_config(&mut self, user_id: u64, config: UserConfig) -> redis::RedisResult<()> {
         let config = serde_json::to_string(&config).unwrap();
-        self.connection.set::<String, String, ()>(format!("discord_user:{}", user_id), config).unwrap();
+        self.client.get_connection().unwrap().set::<String, String, ()>(format!("discord_user:{}", user_id), config).unwrap();
         Ok(())
     }
 
@@ -42,7 +42,7 @@ impl Database {
             voicevox_speaker: Some(1)
         };
 
-        self.connection.set(format!("discord_user:{}", user_id), serde_json::to_string(&config).unwrap())?;
+        self.client.get_connection().unwrap().set(format!("discord_user:{}", user_id), serde_json::to_string(&config).unwrap())?;
 
         Ok(())
     }

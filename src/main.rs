@@ -61,8 +61,7 @@ async fn main() {
 
     let database_client = {
         let redis_client = redis::Client::open(config.redis_url).unwrap();
-        let con = redis_client.get_connection().unwrap();
-        Database::new(con)
+        Database::new(redis_client)
     };
 
     // Create TTS storage
