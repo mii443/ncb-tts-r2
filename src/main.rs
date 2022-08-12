@@ -1,3 +1,11 @@
+mod config;
+mod event_handler;
+mod tts;
+mod implement;
+mod data;
+mod database;
+mod events;
+
 use std::{sync::Arc, collections::HashMap};
 
 use config::Config;
@@ -11,13 +19,6 @@ use serenity::{
 };
 
 use songbird::SerenityInit;
-
-mod config;
-mod event_handler;
-mod tts;
-mod implement;
-mod data;
-mod database;
 
 /// Create discord client
 ///

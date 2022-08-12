@@ -1,8 +1,5 @@
 use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::{Member, application_command::{ApplicationCommandOptionType, ApplicationCommandOption, ApplicationCommand}}, voice::VoiceState}, framework::standard::macros::group};
-use crate::{data::TTSData, tts::{instance::TTSInstance, message::AnnounceMessage}, implement::member_name::ReadName};
-
-#[group]
-struct Test;
+use crate::{data::TTSData, tts::{instance::TTSInstance, message::AnnounceMessage}, implement::{member_name::ReadName, voice_move_state::{VoiceMoveStateTrait, VoiceMoveState}}, events};
 
 pub struct Handler;
 
@@ -151,6 +148,15 @@ async fn setup_command(ctx: &Context, command: &ApplicationCommandInteraction) -
 
 #[async_trait]
 impl EventHandler for Handler {
+
+    async fn message(&self, ctx: Context, message: Message) {
+        events::message_receive::message(ctx, message).await
+    }
+
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        events::ready::ready(ctx, ready).await
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             let name = &*command.data.name;
@@ -184,57 +190,13 @@ impl EventHandler for Handler {
 
             let instance = storage.get_mut(&guild_id).unwrap();
 
-            let mut message: Option<String> = None;
+            let voice_move_state = new.move_state(&old, instance.voice_channel);
 
-            match old {
-                Some(old) => {
-                    match (old.channel_id, new.channel_id) {
-                        (Some(old_channel_id), Some(new_channel_id)) => {
-                            if old_channel_id == new_channel_id {
-                                return;
-                            }
-                            if old_channel_id != new_channel_id {
-                                if instance.voice_channel == new_channel_id {
-                                    message = Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name()));
-                                }
-                            } else if old_channel_id == instance.voice_channel && new_channel_id != instance.voice_channel {
-                                message = Some(format!("{} さんが通話から退出しました", new.member.unwrap().read_name()));
-                            } else {
-                                return;
-                            }
-                        }
-                        (Some(old_channel_id), None) => {
-                            if old_channel_id == instance.voice_channel {
-                                message = Some(format!("{} さんが通話から退出しました", new.member.unwrap().read_name()));
-                            } else {
-                                return;
-                            }
-                        }
-                        (None, Some(new_channel_id)) => {
-                            if new_channel_id == instance.voice_channel {
-                                message = Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name()));
-                            } else {
-                                return;
-                            }
-                        }
-                        _ => {
-                            return;
-                        }
-                    }
-                }
-                None => {
-                    match new.channel_id {
-                        Some(channel_id) => {
-                            if instance.voice_channel == channel_id {
-                                message = Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name()));
-                            }
-                        }
-                        None => {
-                            return;
-                        }
-                    }
-                }
-            }
+            let message: Option<String> = match voice_move_state {
+                VoiceMoveState::JOIN => Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name())),
+                VoiceMoveState::LEAVE => Some(format!("{} さんが通話から退出しました", new.member.unwrap().read_name())),
+                _ => None,
+            };
 
             if let Some(message) = message {
                 instance.read(AnnounceMessage {
@@ -242,58 +204,5 @@ impl EventHandler for Handler {
                 }, &ctx).await;
             }
         }
-    }
-
-    async fn message(&self, ctx: Context, message: Message) {
-
-        if message.author.bot {
-            return;
-        }
-
-        let guild_id = message.guild(&ctx.cache).await;
-
-        if let None = guild_id {
-            return;
-        }
-
-        let guild_id = guild_id.unwrap().id;
-
-        let storage_lock = {
-            let data_read = ctx.data.read().await;
-            data_read.get::<TTSData>().expect("Cannot get TTSStorage").clone()
-        };
-
-        {
-            let mut storage = storage_lock.write().await;
-            if !storage.contains_key(&guild_id) {
-                return;
-            }
-
-            let instance = storage.get_mut(&guild_id).unwrap();
-
-            if instance.text_channel.0 != message.channel_id.0 {
-                return;
-            }
-
-            instance.read(message, &ctx).await;
-        }
-    }
-
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-        let _ = ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
-            commands.create_application_command(|command| {
-                command.name("stop")
-                    .description("Stop tts")
-            });
-            commands.create_application_command(|command| {
-                command.name("setup")
-                    .description("Setup tts")
-            });
-            commands.create_application_command(|command| {
-                command.name("config")
-                    .description("Config")
-            })
-        }).await;
     }
 }
