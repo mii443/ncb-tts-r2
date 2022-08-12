@@ -1,4 +1,4 @@
-use std::{path::Path, fs::File, io::Write, env};
+use std::{fs::File, io::Write, env};
 
 use async_trait::async_trait;
 use serenity::prelude::Context;
@@ -34,7 +34,7 @@ pub struct AnnounceMessage {
 
 #[async_trait]
 impl TTSMessage for AnnounceMessage {
-    async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+    async fn parse(&self, instance: &mut TTSInstance, _ctx: &Context) -> String {
         instance.before_message = None;
         format!(r#"<speak>アナウンス<break time="200ms"/>{}</speak>"#, self.message)
     }

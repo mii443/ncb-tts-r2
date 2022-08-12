@@ -1,4 +1,4 @@
-use std::{path::Path, fs::File, io::Write, env};
+use std::{fs::File, io::Write, env};
 
 use async_trait::async_trait;
 use serenity::{prelude::Context, model::prelude::Message};
@@ -8,9 +8,10 @@ use crate::{
     tts::{
         instance::TTSInstance,
         message::TTSMessage,
+        tts_type::TTSType,
         gcp_tts::structs::{
             audio_config::AudioConfig, synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest
-        }, tts_type::{self, TTSType}
+        }
     },
 };
 

@@ -1,4 +1,4 @@
-use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, prelude::{Member, application_command::{ApplicationCommandOptionType, ApplicationCommandOption, ApplicationCommand}}, voice::VoiceState}, framework::standard::macros::group};
+use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::{Interaction, application_command::ApplicationCommandInteraction, InteractionApplicationCommandCallbackDataFlags}, id::{GuildId, UserId}, channel::Message, voice::VoiceState}};
 use crate::{data::TTSData, tts::{instance::TTSInstance, message::AnnounceMessage}, implement::{member_name::ReadName, voice_move_state::{VoiceMoveStateTrait, VoiceMoveState}}, events};
 
 pub struct Handler;
@@ -37,8 +37,6 @@ async fn stop_command(ctx: &Context, command: &ApplicationCommandInteraction) ->
         }).await?;
         return Ok(());
     }
-
-    let channel_id = channel_id.unwrap();
 
     let manager = songbird::get(ctx).await.expect("Cannot get songbird client.").clone();
 

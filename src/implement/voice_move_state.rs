@@ -7,7 +7,6 @@ pub trait VoiceMoveStateTrait {
 pub enum VoiceMoveState {
     JOIN,
     LEAVE,
-    MOVE,
     NONE
 }
 
