@@ -31,6 +31,12 @@ pub async fn voice_state_update(
             _ => None,
         };
 
+        if let Some(message) = message {
+            instance.read(AnnounceMessage {
+                message
+            }, &ctx).await;
+        }
+
         if voice_move_state == VoiceMoveState::LEAVE {
             let mut del_flag = false;
             for channel in guild_id.channels(&ctx.http).await.unwrap() {
@@ -45,12 +51,6 @@ pub async fn voice_state_update(
                 let manager = songbird::get(&ctx).await.expect("Cannot get songbird client.").clone();
 
                 manager.remove(guild_id.0).await.unwrap();
-            } else {
-                if let Some(message) = message {
-                    instance.read(AnnounceMessage {
-                        message
-                    }, &ctx).await;
-                }
             }
         }
     }

@@ -36,6 +36,7 @@ impl EventHandler for Handler {
 
                 let res = (*v).clone();
                 let mut config_changed = false;
+                let mut voicevox_changed = false;
                 match &*res {
                     "TTS_CONFIG_ENGINE_SELECTED_GOOGLE" => {
                         config.tts_type = Some(TTSType::GCP);
@@ -49,6 +50,7 @@ impl EventHandler for Handler {
                         if res.starts_with("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_") {
                             config.voicevox_speaker = Some(i64::from_str_radix(&res.replace("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_", ""), 10).unwrap());
                             config_changed = true;
+                            voicevox_changed = true;
                         }
                     }
                 }
@@ -56,14 +58,23 @@ impl EventHandler for Handler {
                 if config_changed {
                     let database = data_read.get::<DatabaseClientData>().expect("Cannot get DatabaseClientData").clone();
                     let mut database = database.lock().await;
-                    database.set_user_config(message_component.user.id.0, config).await.unwrap();
+                    database.set_user_config(message_component.user.id.0, config.clone()).await.unwrap();
 
-                    message_component.create_interaction_response(&ctx.http, |f| {
-                        f.interaction_response_data(|d| {
-                            d.content("設定しました")
-                                .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                        })
-                    }).await.unwrap();
+                    if voicevox_changed &&  config.tts_type.unwrap_or(TTSType::GCP) == TTSType::GCP {
+                        message_component.create_interaction_response(&ctx.http, |f| {
+                            f.interaction_response_data(|d| {
+                                d.content("設定しました\nこの音声を使うにはAPIをGoogleからVOICEVOXに変更する必要があります。")
+                                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                            })
+                        }).await.unwrap();
+                    } else {
+                        message_component.create_interaction_response(&ctx.http, |f| {
+                            f.interaction_response_data(|d| {
+                                d.content("設定しました")
+                                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                            })
+                        }).await.unwrap();
+                    }
                 }
             }
         }
