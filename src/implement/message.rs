@@ -29,7 +29,7 @@ impl TTSMessage for Message {
                 } else {
                     self.author.name.clone()
                 };
-                format!("{} さんの発言<break time=\"200ms\"/>{}", name, text)
+                format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
             }
         } else {
             let member = self.member.clone();
@@ -38,7 +38,7 @@ impl TTSMessage for Message {
             } else {
                 self.author.name.clone()
             };
-            format!("{} さんの発言<break time=\"200ms\"/>{}", name, text)
+            format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
         };
 
         instance.before_message = Some(self.clone());
