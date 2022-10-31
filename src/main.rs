@@ -7,7 +7,7 @@ mod events;
 mod implement;
 mod tts;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 
 use config::Config;
 use data::{DatabaseClientData, TTSClientData, TTSData};
@@ -46,8 +46,26 @@ async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, ser
 #[tokio::main]
 async fn main() {
     // Load config
-    let config = std::fs::read_to_string("./config.toml").expect("Cannot read config file.");
-    let config: Config = toml::from_str(&config).expect("Cannot load config file.");
+    let config = {
+        let config = std::fs::read_to_string("./config.toml");
+        if let Ok(config) = config {
+            toml::from_str::<Config>(&config).expect("Cannot load config file.")
+        } else {
+            let token = env::var("NCB_TOKEN").unwrap();
+            let application_id = env::var("NCB_APP_ID").unwrap();
+            let prefix = env::var("NCB_PREFIX").unwrap();
+            let redis_url = env::var("NCB_REDIS_URL").unwrap();
+            let voicevox_key = env::var("NCB_VOICEVOX_KEY").unwrap();
+
+            Config {
+                token,
+                application_id: u64::from_str_radix(&application_id, 10).unwrap(),
+                prefix,
+                redis_url,
+                voicevox_key,
+            }
+        }
+    };
 
     // Create discord client
     let mut client = create_client(&config.prefix, &config.token, config.application_id)
