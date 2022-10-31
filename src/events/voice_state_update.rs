@@ -1,6 +1,16 @@
-use serenity::{prelude::Context, model::{prelude::GuildId, voice::VoiceState}};
+use serenity::{
+    model::{prelude::GuildId, voice::VoiceState},
+    prelude::Context,
+};
 
-use crate::{data::TTSData, implement::{voice_move_state::{VoiceMoveStateTrait, VoiceMoveState}, member_name::ReadName}, tts::message::AnnounceMessage};
+use crate::{
+    data::TTSData,
+    implement::{
+        member_name::ReadName,
+        voice_move_state::{VoiceMoveState, VoiceMoveStateTrait},
+    },
+    tts::message::AnnounceMessage,
+};
 
 pub async fn voice_state_update(
     ctx: Context,
@@ -15,7 +25,10 @@ pub async fn voice_state_update(
 
     let storage_lock = {
         let data_read = ctx.data.read().await;
-        data_read.get::<TTSData>().expect("Cannot get TTSStorage").clone()
+        data_read
+            .get::<TTSData>()
+            .expect("Cannot get TTSStorage")
+            .clone()
     };
 
     {
@@ -29,15 +42,19 @@ pub async fn voice_state_update(
         let voice_move_state = new.move_state(&old, instance.voice_channel);
 
         let message: Option<String> = match voice_move_state {
-            VoiceMoveState::JOIN => Some(format!("{} さんが通話に参加しました", new.member.unwrap().read_name())),
-            VoiceMoveState::LEAVE => Some(format!("{} さんが通話から退出しました", new.member.unwrap().read_name())),
+            VoiceMoveState::JOIN => Some(format!(
+                "{} さんが通話に参加しました",
+                new.member.unwrap().read_name()
+            )),
+            VoiceMoveState::LEAVE => Some(format!(
+                "{} さんが通話から退出しました",
+                new.member.unwrap().read_name()
+            )),
             _ => None,
         };
 
         if let Some(message) = message {
-            instance.read(AnnounceMessage {
-                message
-            }, &ctx).await;
+            instance.read(AnnounceMessage { message }, &ctx).await;
         }
 
         if voice_move_state == VoiceMoveState::LEAVE {
@@ -51,7 +68,10 @@ pub async fn voice_state_update(
             if del_flag {
                 storage.remove(&guild_id);
 
-                let manager = songbird::get(&ctx).await.expect("Cannot get songbird client.").clone();
+                let manager = songbird::get(&ctx)
+                    .await
+                    .expect("Cannot get songbird client.")
+                    .clone();
 
                 manager.remove(guild_id.0).await.unwrap();
             }

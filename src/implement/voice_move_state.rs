@@ -1,4 +1,4 @@
-use serenity::model::{voice::VoiceState, prelude::ChannelId};
+use serenity::model::{prelude::ChannelId, voice::VoiceState};
 
 pub trait VoiceMoveStateTrait {
     fn move_state(&self, old: &Option<VoiceState>, target_channel: ChannelId) -> VoiceMoveState;
@@ -8,7 +8,7 @@ pub trait VoiceMoveStateTrait {
 pub enum VoiceMoveState {
     JOIN,
     LEAVE,
-    NONE
+    NONE,
 }
 
 impl VoiceMoveStateTrait for VoiceState {
@@ -17,10 +17,10 @@ impl VoiceMoveStateTrait for VoiceState {
 
         if let None = old.clone() {
             return if target_channel == new.channel_id.unwrap() {
-                        VoiceMoveState::JOIN
-                    } else {
-                        VoiceMoveState::NONE
-                    }
+                VoiceMoveState::JOIN
+            } else {
+                VoiceMoveState::NONE
+            };
         }
 
         let old = (*old).clone().unwrap();
@@ -46,9 +46,7 @@ impl VoiceMoveStateTrait for VoiceState {
                     VoiceMoveState::NONE
                 }
             }
-            _ => {
-                VoiceMoveState::NONE
-            }
+            _ => VoiceMoveState::NONE,
         }
     }
 }

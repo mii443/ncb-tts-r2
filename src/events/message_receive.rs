@@ -1,4 +1,4 @@
-use serenity::{prelude::Context, model::prelude::Message};
+use serenity::{model::prelude::Message, prelude::Context};
 
 use crate::data::TTSData;
 
@@ -17,7 +17,10 @@ pub async fn message(ctx: Context, message: Message) {
 
     let storage_lock = {
         let data_read = ctx.data.read().await;
-        data_read.get::<TTSData>().expect("Cannot get TTSStorage").clone()
+        data_read
+            .get::<TTSData>()
+            .expect("Cannot get TTSStorage")
+            .clone()
     };
 
     {

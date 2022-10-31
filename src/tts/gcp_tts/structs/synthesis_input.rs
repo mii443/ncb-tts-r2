@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Example:
 /// ```rust
@@ -10,5 +10,5 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SynthesisInput {
     pub text: Option<String>,
-    pub ssml: Option<String>
+    pub ssml: Option<String>,
 }

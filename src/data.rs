@@ -1,8 +1,15 @@
-use crate::{tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX}, database::database::Database};
-use serenity::{prelude::{TypeMapKey, RwLock}, model::id::GuildId, futures::lock::Mutex};
+use crate::{
+    database::database::Database,
+    tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX},
+};
+use serenity::{
+    futures::lock::Mutex,
+    model::id::GuildId,
+    prelude::{RwLock, TypeMapKey},
+};
 
 use crate::tts::instance::TTSInstance;
-use std::{sync::Arc, collections::HashMap};
+use std::{collections::HashMap, sync::Arc};
 
 /// TTSInstance data
 pub struct TTSData;

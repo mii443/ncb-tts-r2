@@ -1,9 +1,8 @@
-use serde::{Serialize, Deserialize};
 use crate::tts::gcp_tts::structs::{
-    synthesis_input::SynthesisInput,
-    audio_config::AudioConfig,
+    audio_config::AudioConfig, synthesis_input::SynthesisInput,
     voice_selection_params::VoiceSelectionParams,
 };
+use serde::{Deserialize, Serialize};
 
 /// Example:
 /// ```rust

@@ -1,16 +1,18 @@
-use std::{fs::File, io::Write, env};
+use std::{env, fs::File, io::Write};
 
 use async_trait::async_trait;
 use serenity::prelude::Context;
 
-use crate::{tts::instance::TTSInstance, data::TTSClientData};
+use crate::{data::TTSClientData, tts::instance::TTSInstance};
 
-use super::gcp_tts::structs::{synthesize_request::SynthesizeRequest, synthesis_input::SynthesisInput, audio_config::AudioConfig, voice_selection_params::VoiceSelectionParams};
+use super::gcp_tts::structs::{
+    audio_config::AudioConfig, synthesis_input::SynthesisInput,
+    synthesize_request::SynthesizeRequest, voice_selection_params::VoiceSelectionParams,
+};
 
 /// Message trait that can be used to synthesize text to speech.
 #[async_trait]
 pub trait TTSMessage {
-
     /// Parse the message for synthesis.
     ///
     /// Example:
@@ -36,31 +38,41 @@ pub struct AnnounceMessage {
 impl TTSMessage for AnnounceMessage {
     async fn parse(&self, instance: &mut TTSInstance, _ctx: &Context) -> String {
         instance.before_message = None;
-        format!(r#"<speak>アナウンス<break time="200ms"/>{}</speak>"#, self.message)
+        format!(
+            r#"<speak>アナウンス<break time="200ms"/>{}</speak>"#,
+            self.message
+        )
     }
 
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
         let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
-        let storage = data_read.get::<TTSClientData>().expect("Cannot get TTSClientStorage").clone();
+        let storage = data_read
+            .get::<TTSClientData>()
+            .expect("Cannot get TTSClientStorage")
+            .clone();
         let mut storage = storage.lock().await;
 
-        let audio = storage.0.synthesize(SynthesizeRequest {
-            input: SynthesisInput {
-                text: None,
-                ssml: Some(text)
-            },
-            voice: VoiceSelectionParams {
-                languageCode: String::from("ja-JP"),
-                name: String::from("ja-JP-Wavenet-B"),
-                ssmlGender: String::from("neutral")
-            },
-            audioConfig: AudioConfig {
-                audioEncoding: String::from("mp3"),
-                speakingRate: 1.2f32,
-                pitch: 1.0f32
-            }
-        }).await.unwrap();
+        let audio = storage
+            .0
+            .synthesize(SynthesizeRequest {
+                input: SynthesisInput {
+                    text: None,
+                    ssml: Some(text),
+                },
+                voice: VoiceSelectionParams {
+                    languageCode: String::from("ja-JP"),
+                    name: String::from("ja-JP-Wavenet-B"),
+                    ssmlGender: String::from("neutral"),
+                },
+                audioConfig: AudioConfig {
+                    audioEncoding: String::from("mp3"),
+                    speakingRate: 1.2f32,
+                    pitch: 1.0f32,
+                },
+            })
+            .await
+            .unwrap();
 
         let uuid = uuid::Uuid::new_v4().to_string();
 

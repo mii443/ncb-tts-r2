@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Example:
 /// ```rust
@@ -13,5 +13,5 @@ use serde::{Serialize, Deserialize};
 pub struct VoiceSelectionParams {
     pub languageCode: String,
     pub name: String,
-    pub ssmlGender: String
+    pub ssmlGender: String,
 }

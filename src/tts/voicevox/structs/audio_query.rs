@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::accent_phrase::AccentPhrase;
 
@@ -14,5 +14,5 @@ pub struct AudioQuery {
     pub postPhonemeLength: f64,
     pub outputSamplingRate: f64,
     pub outputStereo: bool,
-    pub kana: Option<String>
+    pub kana: Option<String>,
 }

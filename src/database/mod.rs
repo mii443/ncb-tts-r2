@@ -1,2 +1,2 @@
-pub mod user_config;
 pub mod database;
+pub mod user_config;

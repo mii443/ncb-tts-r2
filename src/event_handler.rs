@@ -1,11 +1,22 @@
-use serenity::{client::{EventHandler, Context}, async_trait, model::{gateway::Ready, interactions::Interaction, id::GuildId, channel::Message, voice::VoiceState, prelude::InteractionApplicationCommandCallbackDataFlags}};
-use crate::{events, commands::{setup::setup_command, stop::stop_command, config::config_command}, data::DatabaseClientData, tts::tts_type::TTSType};
+use crate::{
+    commands::{config::config_command, setup::setup_command, stop::stop_command},
+    data::DatabaseClientData,
+    events,
+    tts::tts_type::TTSType,
+};
+use serenity::{
+    async_trait,
+    client::{Context, EventHandler},
+    model::{
+        channel::Message, gateway::Ready, id::GuildId, interactions::Interaction,
+        prelude::InteractionApplicationCommandCallbackDataFlags, voice::VoiceState,
+    },
+};
 
 pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-
     async fn message(&self, ctx: Context, message: Message) {
         events::message_receive::message(ctx, message).await
     }
@@ -29,9 +40,16 @@ impl EventHandler for Handler {
                 let data_read = ctx.data.read().await;
 
                 let mut config = {
-                    let database = data_read.get::<DatabaseClientData>().expect("Cannot get DatabaseClientData").clone();
+                    let database = data_read
+                        .get::<DatabaseClientData>()
+                        .expect("Cannot get DatabaseClientData")
+                        .clone();
                     let mut database = database.lock().await;
-                    database.get_user_config_or_default(message_component.user.id.0).await.unwrap().unwrap()
+                    database
+                        .get_user_config_or_default(message_component.user.id.0)
+                        .await
+                        .unwrap()
+                        .unwrap()
                 };
 
                 let res = (*v).clone();
@@ -48,7 +66,13 @@ impl EventHandler for Handler {
                     }
                     _ => {
                         if res.starts_with("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_") {
-                            config.voicevox_speaker = Some(i64::from_str_radix(&res.replace("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_", ""), 10).unwrap());
+                            config.voicevox_speaker = Some(
+                                i64::from_str_radix(
+                                    &res.replace("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_", ""),
+                                    10,
+                                )
+                                .unwrap(),
+                            );
                             config_changed = true;
                             voicevox_changed = true;
                         }
@@ -56,11 +80,17 @@ impl EventHandler for Handler {
                 }
 
                 if config_changed {
-                    let database = data_read.get::<DatabaseClientData>().expect("Cannot get DatabaseClientData").clone();
+                    let database = data_read
+                        .get::<DatabaseClientData>()
+                        .expect("Cannot get DatabaseClientData")
+                        .clone();
                     let mut database = database.lock().await;
-                    database.set_user_config(message_component.user.id.0, config.clone()).await.unwrap();
+                    database
+                        .set_user_config(message_component.user.id.0, config.clone())
+                        .await
+                        .unwrap();
 
-                    if voicevox_changed &&  config.tts_type.unwrap_or(TTSType::GCP) == TTSType::GCP {
+                    if voicevox_changed && config.tts_type.unwrap_or(TTSType::GCP) == TTSType::GCP {
                         message_component.create_interaction_response(&ctx.http, |f| {
                             f.interaction_response_data(|d| {
                                 d.content("設定しました\nこの音声を使うにはAPIをGoogleからVOICEVOXに変更する必要があります。")
@@ -68,12 +98,16 @@ impl EventHandler for Handler {
                             })
                         }).await.unwrap();
                     } else {
-                        message_component.create_interaction_response(&ctx.http, |f| {
-                            f.interaction_response_data(|d| {
-                                d.content("設定しました")
-                                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                        message_component
+                            .create_interaction_response(&ctx.http, |f| {
+                                f.interaction_response_data(|d| {
+                                    d.content("設定しました").flags(
+                                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL,
+                                    )
+                                })
                             })
-                        }).await.unwrap();
+                            .await
+                            .unwrap();
                     }
                 }
             }

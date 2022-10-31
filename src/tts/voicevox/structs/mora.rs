@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Mora {
@@ -7,5 +7,5 @@ pub struct Mora {
     pub consonant_length: Option<f64>,
     pub vowel: String,
     pub vowel_length: f64,
-    pub pitch: f64
+    pub pitch: f64,
 }

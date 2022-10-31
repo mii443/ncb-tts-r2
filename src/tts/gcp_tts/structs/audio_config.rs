@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Example:
 /// ```rust
@@ -13,5 +13,5 @@ use serde::{Serialize, Deserialize};
 pub struct AudioConfig {
     pub audioEncoding: String,
     pub speakingRate: f32,
-    pub pitch: f32
+    pub pitch: f32,
 }

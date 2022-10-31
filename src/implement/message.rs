@@ -1,17 +1,19 @@
-use std::{fs::File, io::Write, env};
+use std::{env, fs::File, io::Write};
 
 use async_trait::async_trait;
-use serenity::{prelude::Context, model::prelude::Message};
+use serenity::{model::prelude::Message, prelude::Context};
 
 use crate::{
-    data::{TTSClientData, DatabaseClientData},
+    data::{DatabaseClientData, TTSClientData},
     tts::{
+        gcp_tts::structs::{
+            audio_config::AudioConfig, synthesis_input::SynthesisInput,
+            synthesize_request::SynthesizeRequest,
+        },
         instance::TTSInstance,
         message::TTSMessage,
         tts_type::TTSType,
-        gcp_tts::structs::{
-            audio_config::AudioConfig, synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest
-        }, validator
+        validator,
     },
 };
 
@@ -42,7 +44,11 @@ impl TTSMessage for Message {
         };
 
         if self.attachments.len() > 0 {
-            res = format!("{}<break time=\"200ms\"/>{}個の添付ファイル", res, self.attachments.len());
+            res = format!(
+                "{}<break time=\"200ms\"/>{}個の添付ファイル",
+                res,
+                self.attachments.len()
+            );
         }
 
         instance.before_message = Some(self.clone());
@@ -54,34 +60,51 @@ impl TTSMessage for Message {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
-        let storage = data_read.get::<TTSClientData>().expect("Cannot get GCP TTSClientStorage").clone();
+        let storage = data_read
+            .get::<TTSClientData>()
+            .expect("Cannot get GCP TTSClientStorage")
+            .clone();
         let mut tts = storage.lock().await;
 
         let config = {
-            let database = data_read.get::<DatabaseClientData>().expect("Cannot get DatabaseClientData").clone();
+            let database = data_read
+                .get::<DatabaseClientData>()
+                .expect("Cannot get DatabaseClientData")
+                .clone();
             let mut database = database.lock().await;
-            database.get_user_config_or_default(self.author.id.0).await.unwrap().unwrap()
+            database
+                .get_user_config_or_default(self.author.id.0)
+                .await
+                .unwrap()
+                .unwrap()
         };
 
         let audio = match config.tts_type.unwrap_or(TTSType::GCP) {
-            TTSType::GCP => {
-                tts.0.synthesize(SynthesizeRequest {
+            TTSType::GCP => tts
+                .0
+                .synthesize(SynthesizeRequest {
                     input: SynthesisInput {
                         text: None,
-                        ssml: Some(format!("<speak>{}</speak>", text))
+                        ssml: Some(format!("<speak>{}</speak>", text)),
                     },
                     voice: config.gcp_tts_voice.unwrap(),
                     audioConfig: AudioConfig {
                         audioEncoding: String::from("mp3"),
                         speakingRate: 1.2f32,
-                        pitch: 1.0f32
-                    }
-                }).await.unwrap()
-            }
+                        pitch: 1.0f32,
+                    },
+                })
+                .await
+                .unwrap(),
 
-            TTSType::VOICEVOX => {
-                tts.1.synthesize(text.replace("<break time=\"200ms\"/>", "、"), config.voicevox_speaker.unwrap_or(1)).await.unwrap()
-            }
+            TTSType::VOICEVOX => tts
+                .1
+                .synthesize(
+                    text.replace("<break time=\"200ms\"/>", "、"),
+                    config.voicevox_speaker.unwrap_or(1),
+                )
+                .await
+                .unwrap(),
         };
 
         let uuid = uuid::Uuid::new_v4().to_string();

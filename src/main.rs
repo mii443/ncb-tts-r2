@@ -1,23 +1,25 @@
+mod commands;
 mod config;
-mod event_handler;
-mod tts;
-mod implement;
 mod data;
 mod database;
+mod event_handler;
 mod events;
-mod commands;
+mod implement;
+mod tts;
 
-use std::{sync::Arc, collections::HashMap};
+use std::{collections::HashMap, sync::Arc};
 
 use config::Config;
-use data::{TTSData, TTSClientData, DatabaseClientData};
+use data::{DatabaseClientData, TTSClientData, TTSData};
 use database::database::Database;
 use event_handler::Handler;
-use tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX};
 use serenity::{
-    client::{Client, bridge::gateway::GatewayIntents},
-    framework::StandardFramework, prelude::RwLock, futures::lock::Mutex
+    client::{bridge::gateway::GatewayIntents, Client},
+    framework::StandardFramework,
+    futures::lock::Mutex,
+    prelude::RwLock,
 };
+use tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX};
 
 use songbird::SerenityInit;
 
@@ -30,10 +32,7 @@ use songbird::SerenityInit;
 /// client.start().await;
 /// ```
 async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, serenity::Error> {
-    let framework = StandardFramework::new()
-    .configure(|c| c
-        .with_whitespace(true)
-        .prefix(prefix));
+    let framework = StandardFramework::new().configure(|c| c.with_whitespace(true).prefix(prefix));
 
     Client::builder(token)
         .event_handler(Handler)
@@ -51,12 +50,14 @@ async fn main() {
     let config: Config = toml::from_str(&config).expect("Cannot load config file.");
 
     // Create discord client
-    let mut client = create_client(&config.prefix, &config.token, config.application_id).await.expect("Err creating client");
+    let mut client = create_client(&config.prefix, &config.token, config.application_id)
+        .await
+        .expect("Err creating client");
 
     // Create GCP TTS client
     let tts = match TTS::new("./credentials.json".to_string()).await {
         Ok(tts) => tts,
-        Err(err) => panic!("{}", err)
+        Err(err) => panic!("{}", err),
     };
 
     let voicevox = VOICEVOX::new(config.voicevox_key);
