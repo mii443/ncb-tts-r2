@@ -4,3 +4,4 @@ config.toml
 credentials.json
 /audio
 *.mp3
+*.swp

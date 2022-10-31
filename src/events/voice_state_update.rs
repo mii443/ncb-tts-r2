@@ -18,7 +18,7 @@ pub async fn voice_state_update(
     old: Option<VoiceState>,
     new: VoiceState,
 ) {
-    if new.member.unwrap().user.bot {
+    if new.member.clone().unwrap().user.bot {
         return;
     }
     let guild_id = guild_id.unwrap();

@@ -18,7 +18,7 @@ impl Database {
         &mut self,
         user_id: u64,
     ) -> redis::RedisResult<Option<UserConfig>> {
-        if let Ok(connection) = self.client.get_connection() {
+        if let Ok(mut connection) = self.client.get_connection() {
             let config: String = connection
                 .get(format!("discord_user:{}", user_id))
                 .unwrap_or_default();
