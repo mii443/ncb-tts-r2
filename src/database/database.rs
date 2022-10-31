@@ -13,11 +13,15 @@ impl Database {
     }
 
     pub async fn get_user_config(&mut self, user_id: u64) -> redis::RedisResult<Option<UserConfig>> {
-        let config: String = self.client.get_connection().unwrap().get(format!("discord_user:{}", user_id)).unwrap_or_default();
+        if let Ok(connection) = self.client.get_connection() {
+            let config: String = connection.get(format!("discord_user:{}", user_id)).unwrap_or_default();
 
-        match serde_json::from_str(&config) {
-            Ok(config) => Ok(Some(config)),
-            Err(_) => Ok(None)
+            match serde_json::from_str(&config) {
+                Ok(config) => Ok(Some(config)),
+                Err(_) => Ok(None)
+            }
+        } else {
+            Ok(None)
         }
     }
 

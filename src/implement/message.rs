@@ -19,7 +19,7 @@ use crate::{
 impl TTSMessage for Message {
     async fn parse(&self, instance: &mut TTSInstance, _: &Context) -> String {
         let text = validator::remove_url(self.content.clone());
-        let res = if let Some(before_message) = &instance.before_message {
+        let mut res = if let Some(before_message) = &instance.before_message {
             if before_message.author.id == self.author.id {
                 text.clone()
             } else {
@@ -40,6 +40,10 @@ impl TTSMessage for Message {
             };
             format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
         };
+
+        if self.attachments.len() > 0 {
+            res = format!("{}<break time=\"200ms\"/>{}個の添付ファイル", res, self.attachments.len());
+        }
 
         instance.before_message = Some(self.clone());
 
