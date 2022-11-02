@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+    ncb-tts-r2:
+        container_name: ncb-tts-r2
+        image: ghcr.io/morioka22/ncb-tts-r2:1.1.2
+        environment:
+        - NCB_TOKEN=YOUR_BOT_TOKEN
+        - NCB_APP_ID=YOUR_BOT_ID
+        - NCB_PREFIX=BOT_PREFIX
+        - NCB_REDIS_URL=redis://<REDIS_IP>/
+        - NCB_VOICEVOX_KEY=VOICEVOX_KEY
+        volumes:
+        - ./credentials.json:/ncb-tts-r2/credentials.json:ro
