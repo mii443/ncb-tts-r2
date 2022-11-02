@@ -1,7 +1,6 @@
 use serenity::{
-    model::prelude::{
-        application_command::ApplicationCommandInteraction,
-        InteractionApplicationCommandCallbackDataFlags,
+    model::prelude::interaction::{
+        application_command::ApplicationCommandInteraction, MessageFlags,
     },
     prelude::Context,
 };
@@ -81,7 +80,7 @@ pub async fn config_command(
                             })
                         })
                     })
-                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                    .flags(MessageFlags::EPHEMERAL)
             })
         })
         .await?;

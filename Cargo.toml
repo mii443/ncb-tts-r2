@@ -21,11 +21,11 @@ version = "0.8"
 features = ["serde", "v4"]
 
 [dependencies.songbird]
-version = "0.2.0"
+version = "0.3.0"
 features = ["builtin-queue"]
 
 [dependencies.serenity]
-version = "0.10.9"
+version = "0.11.5"
 features = ["builder", "cache", "client", "gateway", "model", "utils", "unstable_discord_api", "collector", "rustls_backend", "framework", "voice"]
 
 

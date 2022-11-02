@@ -7,7 +7,7 @@ pub async fn message(ctx: Context, message: Message) {
         return;
     }
 
-    let guild_id = message.guild(&ctx.cache).await;
+    let guild_id = message.guild(&ctx.cache);
 
     if let None = guild_id {
         return;

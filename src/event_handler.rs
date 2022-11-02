@@ -8,8 +8,10 @@ use serenity::{
     async_trait,
     client::{Context, EventHandler},
     model::{
-        channel::Message, gateway::Ready, id::GuildId, interactions::Interaction,
-        prelude::InteractionApplicationCommandCallbackDataFlags, voice::VoiceState,
+        channel::Message,
+        gateway::Ready,
+        prelude::interaction::{Interaction, MessageFlags},
+        voice::VoiceState,
     },
 };
 
@@ -94,16 +96,14 @@ impl EventHandler for Handler {
                         message_component.create_interaction_response(&ctx.http, |f| {
                             f.interaction_response_data(|d| {
                                 d.content("設定しました\nこの音声を使うにはAPIをGoogleからVOICEVOXに変更する必要があります。")
-                                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                                    .flags(MessageFlags::EPHEMERAL)
                             })
                         }).await.unwrap();
                     } else {
                         message_component
                             .create_interaction_response(&ctx.http, |f| {
                                 f.interaction_response_data(|d| {
-                                    d.content("設定しました").flags(
-                                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL,
-                                    )
+                                    d.content("設定しました").flags(MessageFlags::EPHEMERAL)
                                 })
                             })
                             .await
@@ -114,13 +114,7 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn voice_state_update(
-        &self,
-        ctx: Context,
-        guild_id: Option<GuildId>,
-        old: Option<VoiceState>,
-        new: VoiceState,
-    ) {
-        events::voice_state_update::voice_state_update(ctx, guild_id, old, new).await
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
+        events::voice_state_update::voice_state_update(ctx, old, new).await
     }
 }

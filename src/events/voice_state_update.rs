@@ -1,8 +1,3 @@
-use serenity::{
-    model::{prelude::GuildId, voice::VoiceState},
-    prelude::Context,
-};
-
 use crate::{
     data::TTSData,
     implement::{
@@ -11,17 +6,15 @@ use crate::{
     },
     tts::message::AnnounceMessage,
 };
+use serenity::{model::voice::VoiceState, prelude::Context};
 
-pub async fn voice_state_update(
-    ctx: Context,
-    guild_id: Option<GuildId>,
-    old: Option<VoiceState>,
-    new: VoiceState,
-) {
+pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: VoiceState) {
     if new.member.clone().unwrap().user.bot {
         return;
     }
-    let guild_id = guild_id.unwrap();
+    let guild_id = new
+        .guild_id
+        .unwrap_or(old.clone().unwrap().guild_id.unwrap());
 
     let storage_lock = {
         let data_read = ctx.data.read().await;

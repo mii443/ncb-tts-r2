@@ -1,7 +1,7 @@
 use serenity::{
     model::prelude::{
-        application_command::ApplicationCommandInteraction,
-        InteractionApplicationCommandCallbackDataFlags, UserId,
+        interaction::{application_command::ApplicationCommandInteraction, MessageFlags},
+        UserId,
     },
     prelude::Context,
 };
@@ -17,20 +17,20 @@ pub async fn setup_command(
             .create_interaction_response(&ctx.http, |f| {
                 f.interaction_response_data(|d| {
                     d.content("このコマンドはサーバーでのみ使用可能です．")
-                        .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                        .flags(MessageFlags::EPHEMERAL)
                 })
             })
             .await?;
         return Ok(());
     }
 
-    let guild = command.guild_id.unwrap().to_guild_cached(&ctx.cache).await;
+    let guild = command.guild_id.unwrap().to_guild_cached(&ctx.cache);
     if let None = guild {
         command
             .create_interaction_response(&ctx.http, |f| {
                 f.interaction_response_data(|d| {
                     d.content("ギルドキャッシュを取得できませんでした．")
-                        .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                        .flags(MessageFlags::EPHEMERAL)
                 })
             })
             .await?;
@@ -48,7 +48,7 @@ pub async fn setup_command(
             .create_interaction_response(&ctx.http, |f| {
                 f.interaction_response_data(|d| {
                     d.content("ボイスチャンネルに参加してから実行してください．")
-                        .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                        .flags(MessageFlags::EPHEMERAL)
                 })
             })
             .await?;
@@ -77,7 +77,7 @@ pub async fn setup_command(
                 .create_interaction_response(&ctx.http, |f| {
                     f.interaction_response_data(|d| {
                         d.content("すでにセットアップしています．")
-                            .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                            .flags(MessageFlags::EPHEMERAL)
                     })
                 })
                 .await?;
@@ -99,7 +99,7 @@ pub async fn setup_command(
 
     command.create_interaction_response(&ctx.http, |f| {
         f.interaction_response_data(|d| {
-            d.create_embed(|e| {
+            d.embed(|e| {
                 e.title("読み上げ (Serenity)")
                     .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ```", false)
                     .field("設定コマンド", "`/config`", false)

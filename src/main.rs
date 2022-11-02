@@ -14,10 +14,10 @@ use data::{DatabaseClientData, TTSClientData, TTSData};
 use database::database::Database;
 use event_handler::Handler;
 use serenity::{
-    client::{bridge::gateway::GatewayIntents, Client},
+    client::Client,
     framework::StandardFramework,
     futures::lock::Mutex,
-    prelude::RwLock,
+    prelude::{GatewayIntents, RwLock},
 };
 use tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX};
 
@@ -34,11 +34,10 @@ use songbird::SerenityInit;
 async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, serenity::Error> {
     let framework = StandardFramework::new().configure(|c| c.with_whitespace(true).prefix(prefix));
 
-    Client::builder(token)
+    Client::builder(token, GatewayIntents::all())
         .event_handler(Handler)
         .application_id(id)
         .framework(framework)
-        .intents(GatewayIntents::all())
         .register_songbird()
         .await
 }
@@ -75,7 +74,7 @@ async fn main() {
     // Create GCP TTS client
     let tts = match TTS::new("./credentials.json".to_string()).await {
         Ok(tts) => tts,
-        Err(err) => panic!("{}", err),
+        Err(err) => panic!("GCP init error: {}", err),
     };
 
     let voicevox = VOICEVOX::new(config.voicevox_key);
