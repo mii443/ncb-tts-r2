@@ -12,6 +12,11 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
     if new.member.clone().unwrap().user.bot {
         return;
     }
+
+    if old.is_none() && new.guild_id.is_none() {
+        return;
+    }
+
     let guild_id = new
         .guild_id
         .unwrap_or(old.clone().unwrap().guild_id.unwrap());
