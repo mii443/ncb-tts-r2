@@ -17,9 +17,11 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
         return;
     }
 
-    let guild_id = new
-        .guild_id
-        .unwrap_or(old.clone().unwrap().guild_id.unwrap());
+    let guild_id = if let Some(guild_id) = new.guild_id {
+        guild_id
+    } else {
+        old.clone().unwrap().guild_id.unwrap()
+    };
 
     let storage_lock = {
         let data_read = ctx.data.read().await;
