@@ -70,7 +70,7 @@ pub async fn setup_command(
             .clone()
     };
 
-    {
+    let thread_id = {
         let mut storage = storage_lock.write().await;
         if storage.contains_key(&guild.id) {
             command
@@ -84,28 +84,43 @@ pub async fn setup_command(
             return Ok(());
         }
 
+        let message = command
+            .channel_id
+            .send_message(&ctx.http, |f| f.content("TTS thread"))
+            .await
+            .unwrap();
+        let thread_id = command
+            .channel_id
+            .create_public_thread(&ctx.http, message, |f| {
+                f.name("TTS").auto_archive_duration(60)
+            })
+            .await
+            .unwrap();
+
         storage.insert(
             guild.id,
             TTSInstance {
                 before_message: None,
                 guild: guild.id,
-                text_channel: command.channel_id,
+                text_channel: thread_id.id,
                 voice_channel: channel_id,
             },
         );
-    }
+
+        thread_id
+    };
 
     let _handler = manager.join(guild.id.0, channel_id.0).await;
+    command
+        .create_interaction_response(&ctx.http, |f| {
+            f.interaction_response_data(|d| d.content("."))
+        })
+        .await?;
 
-    command.create_interaction_response(&ctx.http, |f| {
-        f.interaction_response_data(|d| {
-            d.embed(|e| {
-                e.title("読み上げ (Serenity)")
+    thread_id.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
                     .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ```", false)
                     .field("設定コマンド", "`/config`", false)
-            })
-        })
-    }).await?;
+    )).await?;
 
     Ok(())
 }
