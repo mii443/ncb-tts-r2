@@ -66,6 +66,13 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             }
 
             if del_flag {
+                storage
+                    .get(&guild_id)
+                    .unwrap()
+                    .text_channel
+                    .edit_thread(&ctx.http, |f| f.archived(true))
+                    .await
+                    .unwrap();
                 storage.remove(&guild_id);
 
                 let manager = songbird::get(&ctx)
