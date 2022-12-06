@@ -70,7 +70,7 @@ pub async fn setup_command(
             .clone()
     };
 
-    let thread_id = {
+    let text_channel_id = {
         let mut storage = storage_lock.write().await;
         if storage.contains_key(&guild.id) {
             command
@@ -84,40 +84,59 @@ pub async fn setup_command(
             return Ok(());
         }
 
-        let message = command
-            .channel_id
-            .send_message(&ctx.http, |f| f.content("TTS thread"))
-            .await
-            .unwrap();
-        let thread_id = command
-            .channel_id
-            .create_public_thread(&ctx.http, message, |f| {
-                f.name("TTS").auto_archive_duration(60)
-            })
-            .await
-            .unwrap();
+        let text_channel_id = {
+            if let Some(mode) = command.data.options.get(0) {
+                let mode = mode.clone();
+                let value = mode.value.unwrap();
+                let value = value.as_str().unwrap();
+                match value {
+                    "TEXT_CHANNEL" => command.channel_id,
+                    "NEW_THREAD" => {
+                        let message = command
+                            .channel_id
+                            .send_message(&ctx.http, |f| f.content("TTS thread"))
+                            .await
+                            .unwrap();
+                        command
+                            .channel_id
+                            .create_public_thread(&ctx.http, message, |f| {
+                                f.name("TTS").auto_archive_duration(60)
+                            })
+                            .await
+                            .unwrap()
+                            .id
+                    }
+                    "VOICE_CHANNEL" => channel_id,
+                    _ => channel_id,
+                }
+            } else {
+                channel_id
+            }
+        };
 
         storage.insert(
             guild.id,
             TTSInstance {
                 before_message: None,
                 guild: guild.id,
-                text_channel: thread_id.id,
+                text_channel: text_channel_id,
                 voice_channel: channel_id,
             },
         );
 
-        thread_id
+        text_channel_id
     };
 
     let _handler = manager.join(guild.id.0, channel_id.0).await;
     command
         .create_interaction_response(&ctx.http, |f| {
-            f.interaction_response_data(|d| d.content("."))
+            f.interaction_response_data(|d| {
+                d.content(format!("TTS Channel: <#{}>", text_channel_id))
+            })
         })
         .await?;
 
-    thread_id.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
+    text_channel_id.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
                     .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ```", false)
                     .field("設定コマンド", "`/config`", false)
     )).await?;

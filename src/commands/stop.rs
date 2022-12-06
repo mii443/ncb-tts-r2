@@ -68,7 +68,7 @@ pub async fn stop_command(
             .clone()
     };
 
-    let thread_id = {
+    let text_channel_id = {
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild.id) {
             command
@@ -82,11 +82,11 @@ pub async fn stop_command(
             return Ok(());
         }
 
-        let thread_id = storage.get(&guild.id).unwrap().text_channel;
+        let text_channel_id = storage.get(&guild.id).unwrap().text_channel;
 
         storage.remove(&guild.id);
 
-        thread_id
+        text_channel_id
     };
 
     let _handler = manager.remove(guild.id.0).await;
@@ -97,10 +97,9 @@ pub async fn stop_command(
         })
         .await?;
 
-    thread_id
+    let _ = text_channel_id
         .edit_thread(&ctx.http, |f| f.archived(true))
-        .await
-        .unwrap();
+        .await;
 
     Ok(())
 }

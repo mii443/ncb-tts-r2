@@ -1,5 +1,5 @@
 use serenity::{
-    model::prelude::{command::Command, Ready},
+    model::prelude::{command::Command, CommandId, Ready},
     prelude::Context,
 };
 
@@ -9,7 +9,19 @@ pub async fn ready(ctx: Context, ready: Ready) {
     let _ = Command::set_global_application_commands(&ctx.http, |commands| {
         commands
             .create_application_command(|command| command.name("stop").description("Stop tts"))
-            .create_application_command(|command| command.name("setup").description("Setup tts"))
+            .create_application_command(|command| {
+                command
+                    .name("setup")
+                    .description("Setup tts")
+                    .create_option(|o| {
+                        o.name("Channel Mode")
+                            .description("TTS channel")
+                            .add_string_choice("Text Channel", "TEXT_CHANNEL")
+                            .add_string_choice("New Thread", "NEW_THREAD")
+                            .add_string_choice("Voice Channel", "VOICE_CHANNEL")
+                            .required(false)
+                    })
+            })
             .create_application_command(|command| command.name("config").description("Config"))
     })
     .await;
