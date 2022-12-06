@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ncb-tts-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ncb-tts
+  template:
+    metadata:
+      labels:
+        app: ncb-tts
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.0.4-alpine
+          ports:
+          - containerPort:  6379
+            name: ncb-redis
+          volumeMounts:
+          - name: ncb-redis-pvc
+            mountPath: /data
+        - name: tts
+          image: ghcr.io/morioka22/ncb-tts-r2
+          volumeMounts:
+          - name: gcp-credentials
+            mountPath: /ncb-tts-r2/credentials.json
+            subPath: credentials.json
+          env:
+          - name: NCB_REDIS_URL
+            value: "redis://localhost:6379/"
+          - name: NCB_PREFIX
+            value: "t2!"
+          - name: NCB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: ncb-secret
+                key: BOT_TOKEN
+          - name: NCB_VOICEVOX_KEY
+            valueFrom:
+              secretKeyRef:
+                name: ncb-secret
+                key: VOICEVOX_KEY
+          - name: NCB_APP_ID
+            valueFrom:
+              secretKeyRef:
+                name: ncb-secret
+                key: APP_ID
+      volumes:
+      - name: ncb-redis-pvc
+        persistentVolumeClaim:
+          claimName: ncb-redis-pvc
+      - name: gcp-credentials
+        secret:
+          secretName: gcp-credentials
