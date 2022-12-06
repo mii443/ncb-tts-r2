@@ -139,6 +139,7 @@ pub async fn setup_command(
     text_channel_id.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
                     .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ```", false)
                     .field("設定コマンド", "`/config`", false)
+                    .field("フィードバック", "https://feedback.mii.codes/", false)
     )).await?;
 
     Ok(())
