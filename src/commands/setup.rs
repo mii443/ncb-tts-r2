@@ -131,7 +131,7 @@ pub async fn setup_command(
     command
         .create_interaction_response(&ctx.http, |f| {
             f.interaction_response_data(|d| {
-                d.content(format!("TTS Channel: <#{}>", text_channel_id))
+                d.content(format!("TTS Channel: <#{}>{}", text_channel_id, if text_channel_id == channel_id { "\nボイスチャンネルを右クリックし `チャットを開く` を押して開くことが出来ます。" } else { "" }))
             })
         })
         .await?;
