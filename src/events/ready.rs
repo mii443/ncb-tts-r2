@@ -1,5 +1,5 @@
 use serenity::{
-    model::prelude::{command::Command, CommandId, Ready},
+    model::prelude::{command::Command, Ready},
     prelude::Context,
 };
 
@@ -14,11 +14,12 @@ pub async fn ready(ctx: Context, ready: Ready) {
                     .name("setup")
                     .description("Setup tts")
                     .create_option(|o| {
-                        o.name("Channel Mode")
+                        o.name("mode")
                             .description("TTS channel")
                             .add_string_choice("Text Channel", "TEXT_CHANNEL")
                             .add_string_choice("New Thread", "NEW_THREAD")
                             .add_string_choice("Voice Channel", "VOICE_CHANNEL")
+                            .kind(serenity::model::prelude::command::CommandOptionType::String)
                             .required(false)
                     })
             })
