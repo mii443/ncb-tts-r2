@@ -1,6 +1,7 @@
 use std::{env, fs::File, io::Write};
 
 use async_trait::async_trait;
+use regex::Regex;
 use serenity::{model::prelude::Message, prelude::Context};
 
 use crate::{
@@ -13,14 +14,35 @@ use crate::{
         instance::TTSInstance,
         message::TTSMessage,
         tts_type::TTSType,
-        validator,
     },
 };
 
 #[async_trait]
 impl TTSMessage for Message {
-    async fn parse(&self, instance: &mut TTSInstance, _: &Context) -> String {
-        let text = validator::remove_url(self.content.clone());
+    async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+        let data_read = ctx.data.read().await;
+
+        let config = {
+            let database = data_read
+                .get::<DatabaseClientData>()
+                .expect("Cannot get DatabaseClientData")
+                .clone();
+            let mut database = database.lock().await;
+            database
+                .get_server_config_or_default(instance.guild.0)
+                .await
+                .unwrap()
+                .unwrap()
+        };
+        let mut text = self.content.clone();
+        for rule in config.dictionary.rules {
+            if rule.is_regex {
+                let regex = Regex::new(&rule.rule).unwrap();
+                text = regex.replace_all(&text, rule.to).to_string();
+            } else {
+                text = text.replace(&rule.rule, &rule.to);
+            }
+        }
         let mut res = if let Some(before_message) = &instance.before_message {
             if before_message.author.id == self.author.id {
                 text.clone()

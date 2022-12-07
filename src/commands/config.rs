@@ -1,6 +1,7 @@
 use serenity::{
-    model::prelude::interaction::{
-        application_command::ApplicationCommandInteraction, MessageFlags,
+    model::prelude::{
+        component::ButtonStyle,
+        interaction::{application_command::ApplicationCommandInteraction, MessageFlags},
     },
     prelude::Context,
 };
@@ -77,6 +78,13 @@ pub async fn config_command(
                                         o
                                     })
                                     .placeholder("VOICEVOX Speakerを指定")
+                            })
+                        })
+                        .create_action_row(|a| {
+                            a.create_button(|f| {
+                                f.label("サーバー設定")
+                                    .custom_id("TTS_CONFIG_SERVER")
+                                    .style(ButtonStyle::Primary)
                             })
                         })
                     })
