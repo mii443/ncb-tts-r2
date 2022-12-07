@@ -1,18 +1,19 @@
-FROM ubuntu:22.04
-WORKDIR /usr/src/ncb-tts-r2
-ENV PATH $PATH:/root/.cargo/bin/
-RUN apt-get update \
-&& apt-get install -y ffmpeg libssl-dev pkg-config libopus-dev wget curl gcc \
-&& apt-get -y clean \
-&& rm -rf /var/lib/apt/lists/* \
-&& curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable \
-&& rustup install stable
-COPY Cargo.toml .
-COPY src src
-RUN cargo build --release \
-&& cp /usr/src/ncb-tts-r2/target/release/ncb-tts-r2 /usr/bin/ncb-tts-r2 \
-&& mkdir -p /ncb-tts-r2/audio \
-&& apt-get purge -y pkg-config wget curl gcc \
-&& rustup self uninstall -y
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libssl-dev pkg-config libopus-dev gcc && apt-get -y clean
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+RUN cargo build --release
+
+FROM debian:bullseye-slim AS runtime
 WORKDIR /ncb-tts-r2
-CMD ["ncb-tts-r2"]
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg libssl-dev libopus-dev && apt-get -y clean && mkdir audio
+COPY --from=builder /app/target/release/ncb-tts-r2 /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/ncb-tts-r2"]
