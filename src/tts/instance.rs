@@ -38,4 +38,12 @@ impl TTSInstance {
             call.enqueue_source(input);
         }
     }
+
+    pub async fn skip(&mut self, ctx: &Context) {
+        let manager = songbird::get(&ctx).await.unwrap();
+        let call = manager.get(self.guild).unwrap();
+        let call = call.lock().await;
+        let queue = call.queue();
+        let _ = queue.skip();
+    }
 }

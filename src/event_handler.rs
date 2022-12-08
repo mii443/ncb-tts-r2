@@ -1,5 +1,7 @@
 use crate::{
-    commands::{config::config_command, setup::setup_command, stop::stop_command},
+    commands::{
+        config::config_command, setup::setup_command, skip::skip_command, stop::stop_command,
+    },
     data::DatabaseClientData,
     database::dictionary::Rule,
     events,
@@ -12,7 +14,7 @@ use serenity::{
         channel::Message,
         gateway::Ready,
         prelude::{
-            component::{ActionRowComponent, ButtonStyle, InputText, InputTextStyle},
+            component::{ActionRowComponent, ButtonStyle, InputTextStyle},
             interaction::{Interaction, InteractionResponseType, MessageFlags},
         },
         voice::VoiceState,
@@ -38,6 +40,7 @@ impl EventHandler for Handler {
                 "setup" => setup_command(&ctx, &command).await.unwrap(),
                 "stop" => stop_command(&ctx, &command).await.unwrap(),
                 "config" => config_command(&ctx, &command).await.unwrap(),
+                "skip" => skip_command(&ctx, &command).await.unwrap(),
                 _ => {}
             }
         }

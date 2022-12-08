@@ -24,6 +24,9 @@ pub async fn ready(ctx: Context, ready: Ready) {
                     })
             })
             .create_application_command(|command| command.name("config").description("Config"))
+            .create_application_command(|command| {
+                command.name("skip").description("skip tts message")
+            })
     })
     .await;
 }
