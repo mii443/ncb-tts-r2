@@ -35,6 +35,10 @@ pub async fn message(ctx: Context, message: Message) {
             return;
         }
 
+        if message.content.starts_with(";") {
+            return;
+        }
+
         instance.read(message, &ctx).await;
     }
 }
