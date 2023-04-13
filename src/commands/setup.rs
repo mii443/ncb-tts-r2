@@ -12,6 +12,7 @@ pub async fn setup_command(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Received event");
     if let None = command.guild_id {
         command
             .create_interaction_response(&ctx.http, |f| {
@@ -24,6 +25,7 @@ pub async fn setup_command(
         return Ok(());
     }
 
+    println!("Fetching guild cache");
     let guild = command.guild_id.unwrap().to_guild_cached(&ctx.cache);
     if let None = guild {
         command
@@ -127,7 +129,6 @@ pub async fn setup_command(
         text_channel_id
     };
 
-    let _handler = manager.join(guild.id.0, channel_id.0).await;
     command
         .create_interaction_response(&ctx.http, |f| {
             f.interaction_response_data(|d| {
@@ -135,6 +136,7 @@ pub async fn setup_command(
             })
         })
         .await?;
+    let _handler = manager.join(guild.id.0, channel_id.0).await;
 
     text_channel_id.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
                     .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ\nナースロボ＿タイプＴ```", false)
