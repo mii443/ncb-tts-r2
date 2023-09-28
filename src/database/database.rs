@@ -81,6 +81,7 @@ impl Database {
     pub async fn set_default_server_config(&mut self, server_id: u64) -> redis::RedisResult<()> {
         let config = ServerConfig {
             dictionary: Dictionary::new(),
+            autostart_channel_id: None,
         };
 
         self.client.get_connection().unwrap().set(

@@ -16,6 +16,7 @@ use serenity::{
         prelude::{
             component::{ActionRowComponent, ButtonStyle, InputTextStyle},
             interaction::{Interaction, InteractionResponseType, MessageFlags},
+            ChannelType,
         },
         voice::VoiceState,
     },
@@ -292,6 +293,69 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
+                "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL" => {
+                    let config = {
+                        let data_read = ctx.data.read().await;
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+                        let mut database = database.lock().await;
+                        database
+                            .get_server_config_or_default(message_component.guild_id.unwrap().0)
+                            .await
+                            .unwrap()
+                            .unwrap()
+                    };
+
+                    let channels = message_component
+                        .guild_id
+                        .unwrap()
+                        .channels(&ctx.http)
+                        .await
+                        .unwrap();
+
+                    message_component
+                        .create_interaction_response(&ctx.http, |f| {
+                            f.kind(InteractionResponseType::UpdateMessage)
+                                .interaction_response_data(|d| {
+                                    d.custom_id("SET_AUTOSTART_FORM")
+                                        .content("自動参加チャンネル設定")
+                                        .components(|c| {
+                                            c.create_action_row(|a| {
+                                                a.create_select_menu(|m| {
+                                                    m.min_values(0)
+                                                        .max_values(1)
+                                                        .disabled(false)
+                                                        .custom_id("AUTOSTART_CHANNEL")
+                                                        .options(|o| {
+                                                            // Create channel list
+                                                            for (id, channel) in channels {
+                                                                if channel.kind != ChannelType::Voice {
+                                                                    continue;
+                                                                }
+                                                                o.create_option(|co| {
+                                                                    co.label(channel.name)
+                                                                        .description(
+                                                                        channel
+                                                                            .topic
+                                                                            .unwrap_or(String::from(
+                                                                            "No topic provided.",
+                                                                        )),
+                                                                    )
+                                                                        .value(format!("SET_AUTOSTART_CHANNEL_{}", id.0))
+                                                                });
+                                                            }
+                                                            o
+                                                        })
+                                                })
+                                            })
+                                        })
+                                })
+                        })
+                        .await
+                        .unwrap();
+                }
                 "TTS_CONFIG_SERVER" => {
                     message_component
                         .create_interaction_response(&ctx.http, |f| {
@@ -320,6 +384,13 @@ impl EventHandler for Handler {
                                                         "TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON",
                                                     )
                                                     .label("辞書一覧")
+                                                    .style(ButtonStyle::Primary)
+                                                })
+                                                .create_button(|b| {
+                                                    b.custom_id(
+                                                        "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL"
+                                                    )
+                                                    .label("自動参加チャンネル")
                                                     .style(ButtonStyle::Primary)
                                                 })
                                             })
