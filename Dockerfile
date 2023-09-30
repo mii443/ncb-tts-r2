@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.68 AS chef
 WORKDIR app
 
 FROM chef AS planner
@@ -12,7 +12,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM debian:bullseye-slim AS runtime
+FROM debian:bullseye-20230227-slim AS runtime
 WORKDIR /ncb-tts-r2
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg libssl-dev libopus-dev && apt-get -y clean && mkdir audio
 COPY --from=builder /app/target/release/ncb-tts-r2 /usr/local/bin
