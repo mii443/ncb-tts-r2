@@ -1,10 +1,10 @@
 use crate::{
-    data::TTSData,
+    data::{DatabaseClientData, TTSData},
     implement::{
         member_name::ReadName,
         voice_move_state::{VoiceMoveState, VoiceMoveStateTrait},
     },
-    tts::message::AnnounceMessage,
+    tts::{instance::TTSInstance, message::AnnounceMessage},
 };
 use serenity::{model::voice::VoiceState, prelude::Context};
 
@@ -31,9 +31,46 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             .clone()
     };
 
+    let config = {
+        let data_read = ctx.data.read().await;
+        let database = data_read
+            .get::<DatabaseClientData>()
+            .expect("Cannot get DatabaseClientData")
+            .clone();
+        let mut database = database.lock().await;
+        database
+            .get_server_config_or_default(guild_id.0)
+            .await
+            .unwrap()
+            .unwrap()
+    };
+
     {
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild_id) {
+            if let Some(new_channel) = new.channel_id {
+                if config.autostart_channel_id.unwrap_or(0) == new_channel.0 {
+                    let manager = songbird::get(&ctx)
+                        .await
+                        .expect("Cannot get songbird client.")
+                        .clone();
+                    storage.insert(
+                        guild_id,
+                        TTSInstance {
+                            before_message: None,
+                            guild: guild_id,
+                            text_channel: new_channel,
+                            voice_channel: new_channel,
+                        },
+                    );
+
+                    let _handler = manager.join(guild_id.0, new_channel.0).await;
+                    new_channel.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
+                        .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ\nナースロボ＿タイプＴ```", false)
+                        .field("設定コマンド", "`/config`", false)
+                        .field("フィードバック", "https://feedback.mii.codes/", false))).await.unwrap();
+                }
+            }
             return;
         }
 

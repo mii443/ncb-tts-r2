@@ -293,6 +293,45 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
+                "SET_AUTOSTART_CHANNEL" => {
+                    let autostart_channel_id = if message_component.data.values.len() == 0 {
+                        None
+                    } else {
+                        let ch = message_component.data.values[0]
+                            .strip_prefix("SET_AUTOSTART_CHANNEL_")
+                            .unwrap();
+                        Some(u64::from_str_radix(ch, 10).unwrap())
+                    };
+                    {
+                        let data_read = ctx.data.read().await;
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+                        let mut database = database.lock().await;
+                        let mut config = database
+                            .get_server_config_or_default(message_component.guild_id.unwrap().0)
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        config.autostart_channel_id = autostart_channel_id;
+                        database
+                            .set_server_config(message_component.guild_id.unwrap().0, config)
+                            .await
+                            .unwrap();
+                    };
+
+                    message_component
+                        .create_interaction_response(&ctx.http, |c| {
+                            c.kind(InteractionResponseType::UpdateMessage)
+                                .interaction_response_data(|d| {
+                                    d.content("自動参加チャンネルを設定しました。")
+                                        .components(|f| f)
+                                })
+                        })
+                        .await
+                        .unwrap();
+                }
                 "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL" => {
                     let config = {
                         let data_read = ctx.data.read().await;
@@ -307,6 +346,8 @@ impl EventHandler for Handler {
                             .unwrap()
                             .unwrap()
                     };
+
+                    let autostart_channel_id = config.autostart_channel_id.unwrap_or(0);
 
                     let channels = message_component
                         .guild_id
@@ -327,7 +368,7 @@ impl EventHandler for Handler {
                                                     m.min_values(0)
                                                         .max_values(1)
                                                         .disabled(false)
-                                                        .custom_id("AUTOSTART_CHANNEL")
+                                                        .custom_id("SET_AUTOSTART_CHANNEL")
                                                         .options(|o| {
                                                             // Create channel list
                                                             for (id, channel) in channels {
@@ -344,6 +385,7 @@ impl EventHandler for Handler {
                                                                         )),
                                                                     )
                                                                         .value(format!("SET_AUTOSTART_CHANNEL_{}", id.0))
+                                                                        .default_selection(channel.id.0 == autostart_channel_id)
                                                                 });
                                                             }
                                                             o
