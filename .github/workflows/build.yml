@@ -13,7 +13,7 @@ jobs:
       - uses: docker/metadata-action@v3
         id: meta
         with:
-          images: ghcr.io/morioka22/ncb-tts-r2
+          images: ghcr.io/mii443/ncb-tts-r2
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
