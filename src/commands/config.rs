@@ -7,8 +7,8 @@ use serenity::{
 };
 
 use crate::{
-    data::DatabaseClientData,
-    tts::{tts_type::TTSType, voicevox::voicevox::VOICEVOX},
+    data::{DatabaseClientData, TTSClientData},
+    tts::tts_type::TTSType,
 };
 
 pub async fn config_command(
@@ -29,6 +29,12 @@ pub async fn config_command(
             .unwrap()
             .unwrap()
     };
+
+    let tts_client = data_read
+        .get::<TTSClientData>()
+        .expect("Cannot get TTSClientData")
+        .clone();
+    let voicevox_speakers = tts_client.lock().await.1.get_styles().await;
 
     let voicevox_speaker = config.voicevox_speaker.unwrap_or(1);
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);
@@ -65,7 +71,7 @@ pub async fn config_command(
                                 m.custom_id("TTS_CONFIG_VOICEVOX_SPEAKER")
                                     .options(|o| {
                                         let mut o = o;
-                                        for (name, value) in VOICEVOX::get_speakers() {
+                                        for (name, value) in voicevox_speakers {
                                             o = o.create_option(|co| {
                                                 co.label(name)
                                                     .value(format!(

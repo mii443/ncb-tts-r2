@@ -1,4 +1,6 @@
-const API_URL: &str = "https://api.su-shiki.com/v2/voicevox/audio";
+use super::structs::speaker::Speaker;
+
+const BASE_API_URL: &str = "https://deprecatedapis.tts.quest/v2/";
 
 #[derive(Clone)]
 pub struct VOICEVOX {
@@ -6,38 +8,45 @@ pub struct VOICEVOX {
 }
 
 impl VOICEVOX {
-    pub fn get_speakers() -> Vec<(String, i64)> {
-        vec![
-            ("四国めたん - ノーマル".to_string(), 2),
-            ("四国めたん - あまあま".to_string(), 0),
-            ("四国めたん - ツンツン".to_string(), 6),
-            ("四国めたん - セクシー".to_string(), 4),
-            ("ずんだもん - ノーマル".to_string(), 3),
-            ("ずんだもん - あまあま".to_string(), 1),
-            ("ずんだもん - ツンツン".to_string(), 7),
-            ("ずんだもん - セクシー".to_string(), 5),
-            ("春日部つむぎ - ノーマル".to_string(), 8),
-            ("雨晴はう - ノーマル".to_string(), 10),
-            ("波音リツ - ノーマル".to_string(), 9),
-            ("玄野武宏 - ノーマル".to_string(), 11),
-            ("白上虎太郎 - ノーマル".to_string(), 12),
-            ("青山龍星 - ノーマル".to_string(), 13),
-            ("冥鳴ひまり - ノーマル".to_string(), 14),
-            ("九州そら - ノーマル".to_string(), 16),
-            ("九州そら - あまあま".to_string(), 15),
-            ("九州そら - ツンツン".to_string(), 18),
-            ("九州そら - セクシー".to_string(), 17),
-            ("九州そら - ささやき".to_string(), 19),
-            ("モチノ・キョウコ - ノーマル".to_string(), 20),
-            ("ナースロボ＿タイプＴ - ノーマル".to_string(), 47),
-            ("ナースロボ＿タイプＴ - 楽々".to_string(), 48),
-            ("ナースロボ＿タイプＴ - 恐怖".to_string(), 49),
-            ("ナースロボ＿タイプＴ - 内緒話".to_string(), 50),
-        ]
+    pub async fn get_styles(&self) -> Vec<(String, i64)> {
+        let speakers = self.get_speaker_list().await;
+        let mut speaker_list = vec![];
+        for speaker in speakers {
+            for style in speaker.styles {
+                speaker_list.push((format!("{} - {}", speaker.name, style.name), style.id))
+            }
+        }
+
+        speaker_list
+    }
+
+    pub async fn get_speakers(&self) -> Vec<String> {
+        let speakers = self.get_speaker_list().await;
+        let mut speaker_list = vec![];
+        for speaker in speakers {
+            speaker_list.push(speaker.name)
+        }
+
+        speaker_list
     }
 
     pub fn new(key: String) -> Self {
         Self { key }
+    }
+
+    async fn get_speaker_list(&self) -> Vec<Speaker> {
+        let client = reqwest::Client::new();
+        match client
+            .post(BASE_API_URL.to_string() + "voicevox/speakers/")
+            .query(&[("key", self.key.clone())])
+            .send()
+            .await
+        {
+            Ok(response) => response.json().await.unwrap(),
+            Err(err) => {
+                panic!("Cannot get speaker list. {err:?}")
+            }
+        }
     }
 
     pub async fn synthesize(
@@ -47,7 +56,7 @@ impl VOICEVOX {
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         match client
-            .post(API_URL)
+            .post(BASE_API_URL.to_string() + "voicevox/audio/")
             .query(&[
                 ("speaker", speaker.to_string()),
                 ("text", text),

@@ -1,5 +1,5 @@
 use crate::{
-    data::{DatabaseClientData, TTSData},
+    data::{DatabaseClientData, TTSClientData, TTSData},
     implement::{
         member_name::ReadName,
         voice_move_state::{VoiceMoveState, VoiceMoveStateTrait},
@@ -65,10 +65,30 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     );
 
                     let _handler = manager.join(guild_id.0, new_channel.0).await;
-                    new_channel.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
-                        .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ\nナースロボ＿タイプＴ```", false)
-                        .field("設定コマンド", "`/config`", false)
-                        .field("フィードバック", "https://feedback.mii.codes/", false))).await.unwrap();
+                    let tts_client = ctx
+                        .data
+                        .read()
+                        .await
+                        .get::<TTSClientData>()
+                        .expect("Cannot get TTSClientData")
+                        .clone();
+                    let voicevox_speakers = tts_client.lock().await.1.get_speakers().await;
+
+                    new_channel
+                        .send_message(&ctx.http, |f| {
+                            f.embed(|e| {
+                                e.title("自動参加 読み上げ (Serenity)")
+                                    .field(
+                                        "VOICEVOXクレジット",
+                                        format!("```\n{}\n```", voicevox_speakers.join("\n")),
+                                        false,
+                                    )
+                                    .field("設定コマンド", "`/config`", false)
+                                    .field("フィードバック", "https://feedback.mii.codes/", false)
+                            })
+                        })
+                        .await
+                        .unwrap();
                 }
             }
             return;

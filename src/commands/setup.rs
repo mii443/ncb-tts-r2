@@ -6,7 +6,10 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::{data::TTSData, tts::instance::TTSInstance};
+use crate::{
+    data::{TTSClientData, TTSData},
+    tts::instance::TTSInstance,
+};
 
 pub async fn setup_command(
     ctx: &Context,
@@ -138,11 +141,29 @@ pub async fn setup_command(
         .await?;
     let _handler = manager.join(guild.id.0, channel_id.0).await;
 
-    text_channel_id.send_message(&ctx.http, |f| f.embed(|e| e.title("読み上げ (Serenity)")
-                    .field("クレジット", "```\n四国めたん　　ずんだもん\n春日部つむぎ　雨晴はう\n波音リツ　　　玄野武宏\n白上虎太郎　　青山龍星\n冥鳴ひまり　　九州そら\nモチノ・キョウコ\nナースロボ＿タイプＴ```", false)
+    let tts_client = ctx
+        .data
+        .read()
+        .await
+        .get::<TTSClientData>()
+        .expect("Cannot get TTSClientData")
+        .clone();
+    let voicevox_speakers = tts_client.lock().await.1.get_speakers().await;
+
+    text_channel_id
+        .send_message(&ctx.http, |f| {
+            f.embed(|e| {
+                e.title("読み上げ (Serenity)")
+                    .field(
+                        "VOICEVOXクレジット",
+                        format!("```\n{}\n```", voicevox_speakers.join("\n")),
+                        false,
+                    )
                     .field("設定コマンド", "`/config`", false)
                     .field("フィードバック", "https://feedback.mii.codes/", false)
-    )).await?;
+            })
+        })
+        .await?;
 
     Ok(())
 }
