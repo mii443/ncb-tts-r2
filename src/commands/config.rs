@@ -74,7 +74,9 @@ pub async fn config_command(
                                 })
                             });
 
-                        for (index, speaker_chunk) in voicevox_speakers.chunks(25).enumerate() {
+                        for (index, speaker_chunk) in
+                            voicevox_speakers[0..24].chunks(25).enumerate()
+                        {
                             c = c.create_action_row(|a| {
                                 let mut a = a;
                                 a = a.create_select_menu(|m| {
@@ -102,6 +104,7 @@ pub async fn config_command(
                             })
                         }
 
+                        println!("{:?}", c);
                         c
                     })
                     .flags(MessageFlags::EPHEMERAL)
