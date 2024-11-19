@@ -15,6 +15,7 @@ base64 = "0.22.1"
 async-trait = "0.1.57"
 redis = "*"
 regex = "1"
+poise = "0.6.1"
 
 [dependencies.uuid]
 version = "1.11.0"
@@ -23,11 +24,6 @@ features = ["serde", "v4"]
 [dependencies.songbird]
 version = "0.4.4"
 features = ["builtin-queue"]
-
-[dependencies.serenity]
-version = "0.12.4"
-features = ["builder", "cache", "client", "gateway", "model", "utils", "unstable_discord_api", "collector", "rustls_backend", "framework", "voice"]
-
 
 [dependencies.tokio]
 version = "1.0"
