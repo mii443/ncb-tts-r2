@@ -8,24 +8,24 @@ edition = "2021"
 [dependencies]
 serde_json = "1.0"
 serde = "1.0"
-toml = "0.5"
-gcp_auth = "0.5.0"
-reqwest = { version = "0.11", features = ["json"] }
-base64 = "0.13"
+toml = "0.8.19"
+gcp_auth = "0.12.3"
+reqwest = { version = "0.12.9", features = ["json"] }
+base64 = "0.22.1"
 async-trait = "0.1.57"
 redis = "*"
 regex = "1"
 
 [dependencies.uuid]
-version = "0.8"
+version = "1.11.0"
 features = ["serde", "v4"]
 
 [dependencies.songbird]
-version = "0.3.2"
+version = "0.4.4"
 features = ["builtin-queue"]
 
 [dependencies.serenity]
-version = "0.11.5"
+version = "0.12.4"
 features = ["builder", "cache", "client", "gateway", "model", "utils", "unstable_discord_api", "collector", "rustls_backend", "framework", "voice"]
 
 
