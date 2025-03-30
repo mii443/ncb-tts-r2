@@ -14,10 +14,7 @@ use data::{DatabaseClientData, TTSClientData, TTSData};
 use database::database::Database;
 use event_handler::Handler;
 use serenity::{
-    client::Client,
-    framework::StandardFramework,
-    futures::lock::Mutex,
-    prelude::{GatewayIntents, RwLock},
+    all::{standard::Configuration, ApplicationId}, client::Client, framework::StandardFramework, futures::lock::Mutex, prelude::{GatewayIntents, RwLock}
 };
 use tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX};
 
@@ -32,11 +29,12 @@ use songbird::SerenityInit;
 /// client.start().await;
 /// ```
 async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, serenity::Error> {
-    let framework = StandardFramework::new().configure(|c| c.with_whitespace(true).prefix(prefix));
+    let framework = StandardFramework::new();
+    framework.configure(Configuration::new().with_whitespace(true).prefix(prefix));
 
     Client::builder(token, GatewayIntents::all())
         .event_handler(Handler)
-        .application_id(id)
+        .application_id(ApplicationId::new(id))
         .framework(framework)
         .register_songbird()
         .await
