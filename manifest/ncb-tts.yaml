@@ -22,7 +22,7 @@ spec:
           - name: ncb-redis-pvc
             mountPath: /data
         - name: tts
-          image: ghcr.io/morioka22/ncb-tts-r2
+          image: ghcr.io/mii443/ncb-tts-r2
           volumeMounts:
           - name: gcp-credentials
             mountPath: /ncb-tts-r2/credentials.json
