@@ -31,7 +31,7 @@ pub async fn message(ctx: Context, message: Message) {
 
         let instance = storage.get_mut(&guild_id).unwrap();
 
-        if instance.text_channel.0 != message.channel_id.0 {
+        if instance.text_channel != message.channel_id {
             return;
         }
 

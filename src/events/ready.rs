@@ -1,32 +1,20 @@
 use serenity::{
-    model::prelude::{command::Command, Ready},
-    prelude::Context,
+    all::{Command, CommandOptionType, CreateCommand, CreateCommandOption}, model::prelude::Ready, prelude::Context
 };
 
 pub async fn ready(ctx: Context, ready: Ready) {
     println!("{} is connected!", ready.user.name);
 
-    let _ = Command::set_global_application_commands(&ctx.http, |commands| {
-        commands
-            .create_application_command(|command| command.name("stop").description("Stop tts"))
-            .create_application_command(|command| {
-                command
-                    .name("setup")
-                    .description("Setup tts")
-                    .create_option(|o| {
-                        o.name("mode")
-                            .description("TTS channel")
-                            .add_string_choice("Text Channel", "TEXT_CHANNEL")
-                            .add_string_choice("New Thread", "NEW_THREAD")
-                            .add_string_choice("Voice Channel", "VOICE_CHANNEL")
-                            .kind(serenity::model::prelude::command::CommandOptionType::String)
-                            .required(false)
-                    })
-            })
-            .create_application_command(|command| command.name("config").description("Config"))
-            .create_application_command(|command| {
-                command.name("skip").description("skip tts message")
-            })
-    })
-    .await;
+    Command::set_global_commands(&ctx.http, vec![
+        CreateCommand::new("stop").description("Stop tts"),
+        CreateCommand::new("setup").description("Setup tts").set_options(vec![
+            CreateCommandOption::new(CommandOptionType::String, "mode", "TTS channel")
+            .add_string_choice("Text Channel", "TEXT_CHANNEL")
+            .add_string_choice("New Thread", "NEW_THREAD")
+            .add_string_choice("Voice Channel", "VOICE_CHANNEL")
+            .required(false)
+        ]),
+        CreateCommand::new("config").description("Config"),
+        CreateCommand::new("skip").description("skip tts message"),
+    ]).await.unwrap();
 }

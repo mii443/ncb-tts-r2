@@ -6,7 +6,7 @@ use crate::{
     },
     tts::{instance::TTSInstance, message::AnnounceMessage},
 };
-use serenity::{model::voice::VoiceState, prelude::Context};
+use serenity::{all::{CreateEmbed, CreateMessage, EditThread}, model::voice::VoiceState, prelude::Context};
 
 pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: VoiceState) {
     if new.member.clone().unwrap().user.bot {
@@ -39,7 +39,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             .clone();
         let mut database = database.lock().await;
         database
-            .get_server_config_or_default(guild_id.0)
+            .get_server_config_or_default(guild_id.get())
             .await
             .unwrap()
             .unwrap()
@@ -49,7 +49,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild_id) {
             if let Some(new_channel) = new.channel_id {
-                if config.autostart_channel_id.unwrap_or(0) == new_channel.0 {
+                if config.autostart_channel_id.unwrap_or(0) == new_channel.get() {
                     let manager = songbird::get(&ctx)
                         .await
                         .expect("Cannot get songbird client.")
@@ -64,7 +64,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                         },
                     );
 
-                    let _handler = manager.join(guild_id.0, new_channel.0).await;
+                    let _handler = manager.join(guild_id, new_channel).await;
                     let tts_client = ctx
                         .data
                         .read()
@@ -75,18 +75,15 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     let voicevox_speakers = tts_client.lock().await.1.get_speakers().await;
 
                     new_channel
-                        .send_message(&ctx.http, |f| {
-                            f.embed(|e| {
-                                e.title("自動参加 読み上げ (Serenity)")
-                                    .field(
-                                        "VOICEVOXクレジット",
-                                        format!("```\n{}\n```", voicevox_speakers.join("\n")),
-                                        false,
-                                    )
-                                    .field("設定コマンド", "`/config`", false)
-                                    .field("フィードバック", "https://feedback.mii.codes/", false)
-                            })
-                        })
+                        .send_message(&ctx.http, 
+                    CreateMessage::new()
+                                .embed(
+                                    CreateEmbed::new()
+                                        .title("自動参加 読み上げ（Serenity）")
+                                        .field("VOICEVOXクレジット", format!("```\n{}\n```", voicevox_speakers.join("\n")), false)
+                                        .field("設定コマンド", "`/config`", false)
+                                        .field("フィードバック", "https://feedback.mii.codes/", false))
+                        )
                         .await
                         .unwrap();
                 }
@@ -118,7 +115,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             let mut del_flag = false;
             for channel in guild_id.channels(&ctx.http).await.unwrap() {
                 if channel.0 == instance.voice_channel {
-                    del_flag = channel.1.members(&ctx.cache).await.unwrap().len() <= 1;
+                    del_flag = channel.1.members(&ctx.cache).unwrap().len() <= 1;
                 }
             }
 
@@ -127,7 +124,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     .get(&guild_id)
                     .unwrap()
                     .text_channel
-                    .edit_thread(&ctx.http, |f| f.archived(true))
+                    .edit_thread(&ctx.http, EditThread::new().archived(true))
                     .await;
                 storage.remove(&guild_id);
 
@@ -136,7 +133,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     .expect("Cannot get songbird client.")
                     .clone();
 
-                manager.remove(guild_id.0).await.unwrap();
+                manager.remove(guild_id).await.unwrap();
             }
         }
     }

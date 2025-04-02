@@ -1,7 +1,6 @@
 use serenity::{
-    model::prelude::{
-        component::ButtonStyle,
-        interaction::{application_command::ApplicationCommandInteraction, MessageFlags},
+    all::{
+        ButtonStyle, CommandInteraction, CreateActionRow, CreateButton, CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, MessageFlags
     },
     prelude::Context,
 };
@@ -13,7 +12,7 @@ use crate::{
 
 pub async fn config_command(
     ctx: &Context,
-    command: &ApplicationCommandInteraction,
+    command: &CommandInteraction,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let data_read = ctx.data.read().await;
 
@@ -24,7 +23,7 @@ pub async fn config_command(
             .clone();
         let mut database = database.lock().await;
         database
-            .get_user_config_or_default(command.user.id.0)
+            .get_user_config_or_default(command.user.id.get())
             .await
             .unwrap()
             .unwrap()
@@ -39,77 +38,54 @@ pub async fn config_command(
     let voicevox_speaker = config.voicevox_speaker.unwrap_or(1);
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);
 
+    let engine_select = CreateActionRow::SelectMenu(
+        CreateSelectMenu::new("TTS_CONFIG_ENGINE", CreateSelectMenuKind::String { options: vec![
+            CreateSelectMenuOption::new("Google TTS", "TTS_CONFIG_ENGINE_SELECTED_GOOGLE")
+                .default_selection(tts_type == TTSType::GCP),
+            CreateSelectMenuOption::new("VOICEVOX", "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX")
+                .default_selection(tts_type == TTSType::VOICEVOX)
+        ] }).placeholder("読み上げAPIを選択")
+    );
+
+    let server_button = CreateActionRow::Buttons(vec![
+        CreateButton::new("TTS_CONFIG_SERVER")
+            .label("サーバー設定")
+            .style(ButtonStyle::Primary)
+    ]);
+
+    let mut components = vec![engine_select, server_button];
+
+    for (index, speaker_chunk) in voicevox_speakers[0..24].chunks(25).enumerate() {
+        let mut options = Vec::new();
+        
+        for (name, id) in speaker_chunk {
+            options.push(
+                CreateSelectMenuOption::new(
+                    name, 
+                    format!("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_{}", id)
+                ).default_selection(*id == voicevox_speaker)
+            );
+        }
+        
+        components.push(
+            CreateActionRow::SelectMenu(
+                CreateSelectMenu::new(
+                    format!("TTS_CONFIG_VOICEVOX_SPEAKER_{}", index),
+                    CreateSelectMenuKind::String { options }
+                ).placeholder("VOICEVOX Speakerを指定")
+            )
+        );
+    }
+
     command
-        .create_interaction_response(&ctx.http, |f| {
-            f.interaction_response_data(|d| {
-                d.content("読み上げ設定")
-                    .components(|c| {
-                        let mut c = c;
-                        c = c
-                            .create_action_row(|a| {
-                                a.create_select_menu(|m| {
-                                    m.custom_id("TTS_CONFIG_ENGINE")
-                                        .options(|o| {
-                                            o.create_option(|co| {
-                                                co.label("Google TTS")
-                                                    .value("TTS_CONFIG_ENGINE_SELECTED_GOOGLE")
-                                                    .default_selection(tts_type == TTSType::GCP)
-                                            })
-                                            .create_option(|co| {
-                                                co.label("VOICEVOX")
-                                                    .value("TTS_CONFIG_ENGINE_SELECTED_VOICEVOX")
-                                                    .default_selection(
-                                                        tts_type == TTSType::VOICEVOX,
-                                                    )
-                                            })
-                                        })
-                                        .placeholder("読み上げAPIを選択")
-                                })
-                            })
-                            .create_action_row(|a| {
-                                a.create_button(|f| {
-                                    f.label("サーバー設定")
-                                        .custom_id("TTS_CONFIG_SERVER")
-                                        .style(ButtonStyle::Primary)
-                                })
-                            });
-
-                        for (index, speaker_chunk) in
-                            voicevox_speakers[0..24].chunks(25).enumerate()
-                        {
-                            c = c.create_action_row(|a| {
-                                let mut a = a;
-                                a = a.create_select_menu(|m| {
-                                    m.custom_id(
-                                        "TTS_CONFIG_VOICEVOX_SPEAKER_".to_string()
-                                            + &index.to_string(),
-                                    )
-                                    .options(|o| {
-                                        let mut o = o;
-                                        for (name, id) in speaker_chunk {
-                                            o = o.create_option(|co| {
-                                                co.label(name)
-                                                    .value(format!(
-                                                        "TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_{}",
-                                                        id
-                                                    ))
-                                                    .default_selection(*id == voicevox_speaker)
-                                            })
-                                        }
-                                        o
-                                    })
-                                    .placeholder("VOICEVOX Speakerを指定")
-                                });
-                                a
-                            })
-                        }
-
-                        println!("{:?}", c);
-                        c
-                    })
-                    .flags(MessageFlags::EPHEMERAL)
-            })
-        })
+        .create_response(&ctx.http, 
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .content("読み上げ設定")
+                    .components(components)
+                    .ephemeral(true)
+            ))
         .await?;
+    
     Ok(())
 }

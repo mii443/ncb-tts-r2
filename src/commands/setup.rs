@@ -1,8 +1,8 @@
 use serenity::{
-    model::prelude::{
-        interaction::{application_command::ApplicationCommandInteraction, MessageFlags},
-        UserId,
+    all::{
+        AutoArchiveDuration, CommandInteraction, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage, CreateThread
     },
+    model::prelude::UserId,
     prelude::Context,
 };
 
@@ -13,49 +13,39 @@ use crate::{
 
 pub async fn setup_command(
     ctx: &Context,
-    command: &ApplicationCommandInteraction,
+    command: &CommandInteraction,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Received event");
-    if let None = command.guild_id {
+    
+    if command.guild_id.is_none() {
         command
-            .create_interaction_response(&ctx.http, |f| {
-                f.interaction_response_data(|d| {
-                    d.content("このコマンドはサーバーでのみ使用可能です．")
-                        .flags(MessageFlags::EPHEMERAL)
-                })
-            })
+            .create_response(&ctx.http, 
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content("このコマンドはサーバーでのみ使用可能です．")
+                        .ephemeral(true)
+                ))
             .await?;
         return Ok(());
     }
 
     println!("Fetching guild cache");
-    let guild = command.guild_id.unwrap().to_guild_cached(&ctx.cache);
-    if let None = guild {
-        command
-            .create_interaction_response(&ctx.http, |f| {
-                f.interaction_response_data(|d| {
-                    d.content("ギルドキャッシュを取得できませんでした．")
-                        .flags(MessageFlags::EPHEMERAL)
-                })
-            })
-            .await?;
-        return Ok(());
-    }
-    let guild = guild.unwrap();
+    let guild_id = command.guild_id.unwrap();
+    let guild = guild_id.to_guild_cached(&ctx.cache).unwrap().clone();
 
     let channel_id = guild
         .voice_states
-        .get(&UserId(command.user.id.0))
+        .get(&UserId::from(command.user.id.get()))
         .and_then(|state| state.channel_id);
 
-    if let None = channel_id {
+    if channel_id.is_none() {
         command
-            .create_interaction_response(&ctx.http, |f| {
-                f.interaction_response_data(|d| {
-                    d.content("ボイスチャンネルに参加してから実行してください．")
-                        .flags(MessageFlags::EPHEMERAL)
-                })
-            })
+            .create_response(&ctx.http, 
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content("ボイスチャンネルに参加してから実行してください．")
+                        .ephemeral(true)
+                ))
             .await?;
         return Ok(());
     }
@@ -79,39 +69,39 @@ pub async fn setup_command(
         let mut storage = storage_lock.write().await;
         if storage.contains_key(&guild.id) {
             command
-                .create_interaction_response(&ctx.http, |f| {
-                    f.interaction_response_data(|d| {
-                        d.content("すでにセットアップしています．")
-                            .flags(MessageFlags::EPHEMERAL)
-                    })
-                })
+                .create_response(&ctx.http, 
+                    CreateInteractionResponse::Message(
+                        CreateInteractionResponseMessage::new()
+                            .content("すでにセットアップしています．")
+                            .ephemeral(true)
+                    ))
                 .await?;
             return Ok(());
         }
 
         let text_channel_id = {
             if let Some(mode) = command.data.options.get(0) {
-                let mode = mode.clone();
-                let value = mode.value.unwrap();
-                let value = value.as_str().unwrap();
-                match value {
-                    "TEXT_CHANNEL" => command.channel_id,
-                    "NEW_THREAD" => {
-                        let message = command
-                            .channel_id
-                            .send_message(&ctx.http, |f| f.content("TTS thread"))
-                            .await
-                            .unwrap();
-                        command
-                            .channel_id
-                            .create_public_thread(&ctx.http, message, |f| {
-                                f.name("TTS").auto_archive_duration(60)
-                            })
-                            .await
-                            .unwrap()
-                            .id
-                    }
-                    "VOICE_CHANNEL" => channel_id,
+                match &mode.value {
+                    serenity::all::CommandDataOptionValue::String(value) => {
+                        match value.as_str() {
+                            "TEXT_CHANNEL" => command.channel_id,
+                            "NEW_THREAD" => {
+                                let message = command
+                                    .channel_id
+                                    .send_message(&ctx.http, CreateMessage::new().content("TTS thread"))
+                                    .await
+                                    .unwrap();
+                                command
+                                    .channel_id
+                                    .create_thread(&ctx.http, CreateThread::new("TTS").auto_archive_duration(AutoArchiveDuration::OneHour).kind(serenity::all::ChannelType::PublicThread))
+                                    .await
+                                    .unwrap()
+                                    .id
+                            }
+                            "VOICE_CHANNEL" => channel_id,
+                            _ => channel_id,
+                        }
+                    },
                     _ => channel_id,
                 }
             } else {
@@ -133,13 +123,22 @@ pub async fn setup_command(
     };
 
     command
-        .create_interaction_response(&ctx.http, |f| {
-            f.interaction_response_data(|d| {
-                d.content(format!("TTS Channel: <#{}>{}", text_channel_id, if text_channel_id == channel_id { "\nボイスチャンネルを右クリックし `チャットを開く` を押して開くことが出来ます。" } else { "" }))
-            })
-        })
+        .create_response(&ctx.http, 
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .content(format!(
+                        "TTS Channel: <#{}>{}", 
+                        text_channel_id, 
+                        if text_channel_id == channel_id { 
+                            "\nボイスチャンネルを右クリックし `チャットを開く` を押して開くことが出来ます。" 
+                        } else { 
+                            "" 
+                        }
+                    ))
+            ))
         .await?;
-    let _handler = manager.join(guild.id.0, channel_id.0).await;
+
+    let _handler = manager.join(guild.id, channel_id).await;
 
     let tts_client = ctx
         .data
@@ -151,9 +150,10 @@ pub async fn setup_command(
     let voicevox_speakers = tts_client.lock().await.1.get_speakers().await;
 
     text_channel_id
-        .send_message(&ctx.http, |f| {
-            f.embed(|e| {
-                e.title("読み上げ (Serenity)")
+        .send_message(&ctx.http, CreateMessage::new()
+            .embed(
+                CreateEmbed::new()
+                    .title("読み上げ (Serenity)")
                     .field(
                         "VOICEVOXクレジット",
                         format!("```\n{}\n```", voicevox_speakers.join("\n")),
@@ -161,8 +161,7 @@ pub async fn setup_command(
                     )
                     .field("設定コマンド", "`/config`", false)
                     .field("フィードバック", "https://feedback.mii.codes/", false)
-            })
-        })
+            ))
         .await?;
 
     Ok(())

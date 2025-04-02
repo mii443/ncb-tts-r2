@@ -29,7 +29,7 @@ impl TTSMessage for Message {
                 .clone();
             let mut database = database.lock().await;
             database
-                .get_server_config_or_default(instance.guild.0)
+                .get_server_config_or_default(instance.guild.get())
                 .await
                 .unwrap()
                 .unwrap()
@@ -95,7 +95,7 @@ impl TTSMessage for Message {
                 .clone();
             let mut database = database.lock().await;
             database
-                .get_user_config_or_default(self.author.id.0)
+                .get_user_config_or_default(self.author.id.get())
                 .await
                 .unwrap()
                 .unwrap()

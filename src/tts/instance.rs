@@ -5,6 +5,7 @@ use serenity::{
     },
     prelude::Context,
 };
+use songbird::input::File;
 
 use crate::tts::message::TTSMessage;
 
@@ -32,10 +33,8 @@ impl TTSInstance {
             let manager = songbird::get(&ctx).await.unwrap();
             let call = manager.get(self.guild).unwrap();
             let mut call = call.lock().await;
-            let input = songbird::input::ffmpeg(path)
-                .await
-                .expect("File not found.");
-            call.enqueue_source(input);
+            let input = File::new(path);
+            call.enqueue(input.into());
         }
     }
 

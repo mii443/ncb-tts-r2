@@ -106,9 +106,9 @@ impl EventHandler for Handler {
         if let Some(message_component) = interaction.message_component() {
             match &*message_component.data.custom_id {
                 "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU" => {
-                    let i = usize::from_str_radix(match message_component.data.kind {
-                        ComponentInteractionDataKind::StringSelect { values, .. } => {
-                            &values[0].clone()
+                    let i = usize::from_str_radix(&match message_component.data.kind {
+                        ComponentInteractionDataKind::StringSelect { ref values, .. } => {
+                            values[0].clone()
                         }
                         _ => panic!("Cannot get index"),
                     }, 10).unwrap();
@@ -180,8 +180,7 @@ impl EventHandler for Handler {
                                                             .iter()
                                                             .enumerate()
                                                         {
-                                                            let option = CreateSelectMenuOption::new(rule.id.clone(), i.to_string());
-                                                            option.description(format!(
+                                                            let option = CreateSelectMenuOption::new(rule.id.clone(), i.to_string()).description(format!(
                                                                 "{} -> {}",
                                                                 rule.rule.clone(),
                                                                 rule.to.clone()
@@ -221,7 +220,7 @@ impl EventHandler for Handler {
                                 .embed(CreateEmbed::new()
                                     .title("辞書一覧")
                                     .fields({
-                                        let fields = vec![];
+                                        let mut fields = vec![];
                                         for rule in config.dictionary.rules {
                                             let field = (
                                                 rule.id.clone(),
@@ -275,7 +274,7 @@ impl EventHandler for Handler {
                 }
                 "SET_AUTOSTART_CHANNEL" => {
                     let autostart_channel_id = match message_component.data.kind {
-                        ComponentInteractionDataKind::StringSelect { values, .. } => {
+                        ComponentInteractionDataKind::StringSelect { ref values, .. } => {
                             if values.len() == 0 {
                                 None
                             } else {
@@ -397,8 +396,8 @@ impl EventHandler for Handler {
                 _ => {}
             }
             match message_component.data.kind {
-                ComponentInteractionDataKind::StringSelect { values, .. } if !values.is_empty() => {
-                    let res = &values[0];
+                ComponentInteractionDataKind::StringSelect { ref values, .. } if !values.is_empty() => {
+                    let res = &values[0].clone();
                     let data_read = ctx.data.read().await;
             
                     let mut config = {
