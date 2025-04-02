@@ -15,6 +15,7 @@ base64 = "0.13"
 async-trait = "0.1.57"
 redis = "*"
 regex = "1"
+tracing-subscriber = "0.3.19"
 
 [dependencies.uuid]
 version = "0.8"
@@ -23,6 +24,10 @@ features = ["serde", "v4"]
 [dependencies.songbird]
 version = "0.5"
 features = ["builtin-queue"]
+
+[dependencies.symphonia]
+version = "0.5"
+features = ["mp3"]
 
 [dependencies.serenity]
 version = "0.12"

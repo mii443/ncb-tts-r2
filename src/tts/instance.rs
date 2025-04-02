@@ -34,7 +34,7 @@ impl TTSInstance {
             let call = manager.get(self.guild).unwrap();
             let mut call = call.lock().await;
             let input = File::new(path);
-            call.enqueue(input.into());
+            call.enqueue(input.into()).await;
         }
     }
 
