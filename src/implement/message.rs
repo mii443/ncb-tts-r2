@@ -1,5 +1,3 @@
-use std::{env, fs::File, io::Write};
-
 use async_trait::async_trait;
 use regex::Regex;
 use serenity::{model::prelude::Message, prelude::Context};
@@ -78,7 +76,7 @@ impl TTSMessage for Message {
         res
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<u8> {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
@@ -129,14 +127,6 @@ impl TTSMessage for Message {
                 .unwrap(),
         };
 
-        let uuid = uuid::Uuid::new_v4().to_string();
-
-        let path = env::current_dir().unwrap();
-        let file_path = path.join("audio").join(format!("{}.mp3", uuid));
-
-        let mut file = File::create(file_path.clone()).unwrap();
-        file.write(&audio).unwrap();
-
-        file_path.into_os_string().into_string().unwrap()
+        audio
     }
 }

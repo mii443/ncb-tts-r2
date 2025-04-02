@@ -1,5 +1,3 @@
-use std::{env, fs::File, io::Write};
-
 use async_trait::async_trait;
 use serenity::prelude::Context;
 
@@ -21,13 +19,13 @@ pub trait TTSMessage {
     /// ```
     async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String;
 
-    /// Synthesize the message and returns the path to the audio file.
+    /// Synthesize the message and returns the audio data.
     ///
     /// Example:
     /// ```rust
-    /// let path = message.synthesize(instance, ctx).await;
+    /// let audio = message.synthesize(instance, ctx).await;
     /// ```
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String;
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<u8>;
 }
 
 pub struct AnnounceMessage {
@@ -44,7 +42,7 @@ impl TTSMessage for AnnounceMessage {
         )
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<u8> {
         let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
         let storage = data_read
@@ -74,14 +72,6 @@ impl TTSMessage for AnnounceMessage {
             .await
             .unwrap();
 
-        let uuid = uuid::Uuid::new_v4().to_string();
-
-        let path = env::current_dir().unwrap();
-        let file_path = path.join("audio").join(format!("{}.mp3", uuid));
-
-        let mut file = File::create(file_path.clone()).unwrap();
-        file.write(&audio).unwrap();
-
-        file_path.into_os_string().into_string().unwrap()
+        audio
     }
 }
