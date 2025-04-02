@@ -3,8 +3,7 @@ use regex::Regex;
 use serenity::{model::prelude::Message, prelude::Context};
 
 use crate::{
-    data::{DatabaseClientData, TTSClientData},
-    tts::{
+    data::{DatabaseClientData, TTSClientData}, implement::member_name::ReadName, tts::{
         gcp_tts::structs::{
             audio_config::AudioConfig, synthesis_input::SynthesisInput,
             synthesize_request::SynthesizeRequest,
@@ -12,7 +11,7 @@ use crate::{
         instance::TTSInstance,
         message::TTSMessage,
         tts_type::TTSType,
-    },
+    }
 };
 
 #[async_trait]
@@ -46,19 +45,21 @@ impl TTSMessage for Message {
                 text.clone()
             } else {
                 let member = self.member.clone();
-                let name = if let Some(member) = member {
-                    member.nick.unwrap_or(self.author.name.clone())
+                let name = if let Some(_) = member {
+                    let guild = ctx.cache.guild(self.guild_id.unwrap()).unwrap().clone();
+                    guild.member(&ctx.http, self.author.id).await.unwrap().read_name()
                 } else {
-                    self.author.name.clone()
+                    self.author.read_name()
                 };
                 format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
             }
         } else {
             let member = self.member.clone();
-            let name = if let Some(member) = member {
-                member.nick.unwrap_or(self.author.name.clone())
+            let name = if let Some(_) = member {
+                let guild = ctx.cache.guild(self.guild_id.unwrap()).unwrap().clone();
+                guild.member(&ctx.http, self.author.id).await.unwrap().read_name()
             } else {
-                self.author.name.clone()
+                self.author.read_name()
             };
             format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
         };
