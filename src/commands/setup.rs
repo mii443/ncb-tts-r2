@@ -86,11 +86,6 @@ pub async fn setup_command(
                         match value.as_str() {
                             "TEXT_CHANNEL" => command.channel_id,
                             "NEW_THREAD" => {
-                                let message = command
-                                    .channel_id
-                                    .send_message(&ctx.http, CreateMessage::new().content("TTS thread"))
-                                    .await
-                                    .unwrap();
                                 command
                                     .channel_id
                                     .create_thread(&ctx.http, CreateThread::new("TTS").auto_archive_duration(AutoArchiveDuration::OneHour).kind(serenity::all::ChannelType::PublicThread))

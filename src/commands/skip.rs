@@ -1,7 +1,6 @@
 use serenity::{
     all::{
-        CommandInteraction, CreateInteractionResponse, CreateInteractionResponseMessage,
-        MessageFlags
+        CommandInteraction, CreateInteractionResponse, CreateInteractionResponseMessage
     },
     model::prelude::UserId,
     prelude::Context,
