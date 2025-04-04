@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use regex::Regex;
 use serenity::{model::prelude::Message, prelude::Context};
+use songbird::input::cached::Compressed;
 
 use crate::{
     data::{DatabaseClientData, TTSClientData}, implement::member_name::ReadName, tts::{
@@ -77,7 +78,7 @@ impl TTSMessage for Message {
         res
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<u8> {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Compressed {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
@@ -102,8 +103,7 @@ impl TTSMessage for Message {
 
         let audio = match config.tts_type.unwrap_or(TTSType::GCP) {
             TTSType::GCP => tts
-                .0
-                .synthesize(SynthesizeRequest {
+                .synthesize_gcp(SynthesizeRequest {
                     input: SynthesisInput {
                         text: None,
                         ssml: Some(format!("<speak>{}</speak>", text)),
@@ -119,9 +119,8 @@ impl TTSMessage for Message {
                 .unwrap(),
 
             TTSType::VOICEVOX => tts
-                .1
-                .synthesize(
-                    text.replace("<break time=\"200ms\"/>", "、"),
+                .synthesize_voicevox(
+                    &text.replace("<break time=\"200ms\"/>", "、"),
                     config.voicevox_speaker.unwrap_or(1),
                 )
                 .await

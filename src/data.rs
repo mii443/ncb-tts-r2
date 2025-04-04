@@ -1,6 +1,6 @@
 use crate::{
     database::database::Database,
-    tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX},
+    tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX},
 };
 use serenity::{
     futures::lock::Mutex,
@@ -22,7 +22,7 @@ impl TypeMapKey for TTSData {
 pub struct TTSClientData;
 
 impl TypeMapKey for TTSClientData {
-    type Value = Arc<Mutex<(TTS, VOICEVOX)>>;
+    type Value = Arc<Mutex<TTS>>;
 }
 
 /// Database client data

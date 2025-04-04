@@ -72,7 +72,7 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                         .get::<TTSClientData>()
                         .expect("Cannot get TTSClientData")
                         .clone();
-                    let voicevox_speakers = tts_client.lock().await.1.get_speakers().await;
+                    let voicevox_speakers = tts_client.lock().await.voicevox_client.get_speakers().await;
 
                     new_channel
                         .send_message(&ctx.http, 

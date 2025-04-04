@@ -16,7 +16,8 @@ use event_handler::Handler;
 use serenity::{
     all::{standard::Configuration, ApplicationId}, client::Client, framework::StandardFramework, futures::lock::Mutex, prelude::{GatewayIntents, RwLock}
 };
-use tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX};
+use tracing::Level;
+use tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX};
 
 use songbird::SerenityInit;
 
@@ -42,7 +43,7 @@ async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, ser
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::fmt().with_max_level(Level::DEBUG).init();
     // Load config
     let config = {
         let config = std::fs::read_to_string("./config.toml");
@@ -71,7 +72,7 @@ async fn main() {
         .expect("Err creating client");
 
     // Create GCP TTS client
-    let tts = match TTS::new("./credentials.json".to_string()).await {
+    let tts = match GCPTTS::new("./credentials.json".to_string()).await {
         Ok(tts) => tts,
         Err(err) => panic!("GCP init error: {}", err),
     };
@@ -87,7 +88,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
-        data.insert::<TTSClientData>(Arc::new(Mutex::new((tts, voicevox))));
+        data.insert::<TTSClientData>(Arc::new(Mutex::new(TTS::new(voicevox, tts))));
         data.insert::<DatabaseClientData>(Arc::new(Mutex::new(database_client)));
     }
 

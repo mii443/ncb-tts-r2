@@ -142,7 +142,7 @@ pub async fn setup_command(
         .get::<TTSClientData>()
         .expect("Cannot get TTSClientData")
         .clone();
-    let voicevox_speakers = tts_client.lock().await.1.get_speakers().await;
+    let voicevox_speakers = tts_client.lock().await.voicevox_client.get_speakers().await;
 
     text_channel_id
         .send_message(&ctx.http, CreateMessage::new()

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use serenity::prelude::Context;
+use songbird::input::cached::Compressed;
 
 use crate::{data::TTSClientData, tts::instance::TTSInstance};
 
@@ -25,7 +26,7 @@ pub trait TTSMessage {
     /// ```rust
     /// let audio = message.synthesize(instance, ctx).await;
     /// ```
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<u8>;
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Compressed;
 }
 
 pub struct AnnounceMessage {
@@ -42,7 +43,7 @@ impl TTSMessage for AnnounceMessage {
         )
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<u8> {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Compressed {
         let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
         let storage = data_read
@@ -52,8 +53,7 @@ impl TTSMessage for AnnounceMessage {
         let mut storage = storage.lock().await;
 
         let audio = storage
-            .0
-            .synthesize(SynthesizeRequest {
+            .synthesize_gcp(SynthesizeRequest {
                 input: SynthesisInput {
                     text: None,
                     ssml: Some(text),

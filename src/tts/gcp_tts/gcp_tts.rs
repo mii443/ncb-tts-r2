@@ -4,12 +4,12 @@ use crate::tts::gcp_tts::structs::{
 use gcp_auth::Token;
 
 #[derive(Clone)]
-pub struct TTS {
+pub struct GCPTTS {
     pub token: Token,
     pub credentials_path: String,
 }
 
-impl TTS {
+impl GCPTTS {
     pub async fn update_token(&mut self) -> Result<(), gcp_auth::Error> {
         if self.token.has_expired() {
             let authenticator =
@@ -23,13 +23,13 @@ impl TTS {
         Ok(())
     }
 
-    pub async fn new(credentials_path: String) -> Result<TTS, gcp_auth::Error> {
+    pub async fn new(credentials_path: String) -> Result<Self, gcp_auth::Error> {
         let authenticator = gcp_auth::from_credentials_file(credentials_path.clone()).await?;
         let token = authenticator
             .get_token(&["https://www.googleapis.com/auth/cloud-platform"])
             .await?;
 
-        Ok(TTS {
+        Ok(Self {
             token,
             credentials_path,
         })
