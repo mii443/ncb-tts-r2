@@ -1,3 +1,5 @@
+use tokio::sync::RwLock;
+use std::sync::Arc;
 use crate::tts::gcp_tts::structs::{
     synthesize_request::SynthesizeRequest, synthesize_response::SynthesizeResponse,
 };
@@ -5,19 +7,20 @@ use gcp_auth::Token;
 
 #[derive(Clone)]
 pub struct GCPTTS {
-    pub token: Token,
+    pub token: Arc<RwLock<Token>>,
     pub credentials_path: String,
 }
 
 impl GCPTTS {
-    pub async fn update_token(&mut self) -> Result<(), gcp_auth::Error> {
-        if self.token.has_expired() {
+    pub async fn update_token(&self) -> Result<(), gcp_auth::Error> {
+        let mut token = self.token.write().await;
+        if token.has_expired() {
             let authenticator =
                 gcp_auth::from_credentials_file(self.credentials_path.clone()).await?;
-            let token = authenticator
+            let new_token = authenticator
                 .get_token(&["https://www.googleapis.com/auth/cloud-platform"])
                 .await?;
-            self.token = token;
+            *token = new_token;
         }
 
         Ok(())
@@ -30,7 +33,7 @@ impl GCPTTS {
             .await?;
 
         Ok(Self {
-            token,
+            token: Arc::new(RwLock::new(token)),
             credentials_path,
         })
     }
@@ -57,17 +60,23 @@ impl GCPTTS {
     /// }).await.unwrap();
     /// ```
     pub async fn synthesize(
-        &mut self,
+        &self,
         request: SynthesizeRequest,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         self.update_token().await.unwrap();
         let client = reqwest::Client::new();
+        
+        let token_string = {
+            let token = self.token.read().await;
+            token.as_str().to_string()
+        };
+        
         match client
             .post("https://texttospeech.googleapis.com/v1/text:synthesize")
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.token.as_str()),
+                format!("Bearer {}", token_string),
             )
             .body(serde_json::to_string(&request).unwrap())
             .send()
