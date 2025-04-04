@@ -82,11 +82,6 @@ impl TTSMessage for Message {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
-        let storage = data_read
-            .get::<TTSClientData>()
-            .expect("Cannot get GCP TTSClientStorage")
-            .clone();
-        let mut tts = storage.lock().await;
 
         let config = {
             let database = data_read
@@ -100,6 +95,10 @@ impl TTSMessage for Message {
                 .unwrap()
                 .unwrap()
         };
+
+        let tts = data_read
+            .get::<TTSClientData>()
+            .expect("Cannot get GCP TTSClientStorage");
 
         let audio = match config.tts_type.unwrap_or(TTSType::GCP) {
             TTSType::GCP => tts

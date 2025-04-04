@@ -88,7 +88,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
-        data.insert::<TTSClientData>(Arc::new(Mutex::new(TTS::new(voicevox, tts))));
+        data.insert::<TTSClientData>(Arc::new(TTS::new(voicevox, tts)));
         data.insert::<DatabaseClientData>(Arc::new(Mutex::new(database_client)));
     }
 

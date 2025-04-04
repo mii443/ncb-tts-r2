@@ -65,14 +65,14 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     );
 
                     let _handler = manager.join(guild_id, new_channel).await;
-                    let tts_client = ctx
+                    let data = ctx
                         .data
                         .read()
-                        .await
+                        .await;
+                    let tts_client = data
                         .get::<TTSClientData>()
-                        .expect("Cannot get TTSClientData")
-                        .clone();
-                    let voicevox_speakers = tts_client.lock().await.voicevox_client.get_speakers().await;
+                        .expect("Cannot get TTSClientData");
+                    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await;
 
                     new_channel
                         .send_message(&ctx.http, 

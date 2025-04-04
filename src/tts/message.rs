@@ -46,13 +46,11 @@ impl TTSMessage for AnnounceMessage {
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Compressed> {
         let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
-        let storage = data_read
+        let tts = data_read
             .get::<TTSClientData>()
-            .expect("Cannot get TTSClientStorage")
-            .clone();
-        let mut storage = storage.lock().await;
+            .expect("Cannot get TTSClientStorage");
 
-        let audio = storage
+        let audio = tts
             .synthesize_gcp(SynthesizeRequest {
                 input: SynthesisInput {
                     text: None,

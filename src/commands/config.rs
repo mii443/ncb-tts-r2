@@ -31,9 +31,8 @@ pub async fn config_command(
 
     let tts_client = data_read
         .get::<TTSClientData>()
-        .expect("Cannot get TTSClientData")
-        .clone();
-    let voicevox_speakers = tts_client.lock().await.voicevox_client.get_styles().await;
+        .expect("Cannot get TTSClientData");
+    let voicevox_speakers = tts_client.voicevox_client.get_styles().await;
 
     let voicevox_speaker = config.voicevox_speaker.unwrap_or(1);
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);

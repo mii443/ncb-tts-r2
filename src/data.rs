@@ -22,7 +22,7 @@ impl TypeMapKey for TTSData {
 pub struct TTSClientData;
 
 impl TypeMapKey for TTSClientData {
-    type Value = Arc<Mutex<TTS>>;
+    type Value = Arc<TTS>;
 }
 
 /// Database client data
