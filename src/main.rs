@@ -43,7 +43,7 @@ async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, ser
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().with_max_level(Level::DEBUG).init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
     // Load config
     let config = {
         let config = std::fs::read_to_string("./config.toml");

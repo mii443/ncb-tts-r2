@@ -1,6 +1,6 @@
 use crate::{
     database::database::Database,
-    tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX},
+    tts::tts::TTS,
 };
 use serenity::{
     futures::lock::Mutex,
