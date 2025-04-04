@@ -35,7 +35,7 @@ impl TTS {
 
         if let Some(audio) = self.cache.get(&cache_key) {
             info!("Cache hit for VOICEVOX TTS");
-            return Ok(audio.clone());
+            return Ok(audio.new_handle());
         }
         info!("Cache miss for VOICEVOX TTS");
 
@@ -58,7 +58,7 @@ impl TTS {
 
         if let Some(audio) = self.cache.get(&cache_key) {
             info!("Cache hit for GCP TTS");
-            return Ok(audio.clone());
+            return Ok(audio.new_handle());
         }
         info!("Cache miss for GCP TTS");
 

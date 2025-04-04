@@ -26,7 +26,7 @@ pub trait TTSMessage {
     /// ```rust
     /// let audio = message.synthesize(instance, ctx).await;
     /// ```
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Compressed;
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Compressed>;
 }
 
 pub struct AnnounceMessage {
@@ -43,7 +43,7 @@ impl TTSMessage for AnnounceMessage {
         )
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Compressed {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Compressed> {
         let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
         let storage = data_read
@@ -72,6 +72,6 @@ impl TTSMessage for AnnounceMessage {
             .await
             .unwrap();
 
-        audio
+        vec![audio]
     }
 }

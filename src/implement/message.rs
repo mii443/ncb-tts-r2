@@ -78,7 +78,7 @@ impl TTSMessage for Message {
         res
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Compressed {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Compressed> {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
@@ -127,6 +127,6 @@ impl TTSMessage for Message {
                 .unwrap(),
         };
 
-        audio
+        vec![audio]
     }
 }

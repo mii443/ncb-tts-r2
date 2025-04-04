@@ -32,7 +32,9 @@ impl TTSInstance {
             let manager = songbird::get(&ctx).await.unwrap();
             let call = manager.get(self.guild).unwrap();
             let mut call = call.lock().await;
-            call.enqueue(audio.into()).await;
+            for audio in audio {
+                call.enqueue(audio.into()).await;
+            }
         }
     }
 
