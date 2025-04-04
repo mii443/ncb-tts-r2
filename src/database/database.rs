@@ -84,7 +84,7 @@ impl Database {
             autostart_channel_id: None,
         };
 
-        self.client.get_connection().unwrap().set(
+        self.client.get_connection().unwrap().set::<String, String, ()>(
             format!("discord_server:{}", server_id),
             serde_json::to_string(&config).unwrap(),
         )?;
@@ -107,7 +107,7 @@ impl Database {
             voicevox_speaker: Some(1),
         };
 
-        self.client.get_connection().unwrap().set(
+        self.client.get_connection().unwrap().set::<String, String, ()>(
             format!("discord_user:{}", user_id),
             serde_json::to_string(&config).unwrap(),
         )?;
