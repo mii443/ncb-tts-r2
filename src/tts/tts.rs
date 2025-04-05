@@ -27,7 +27,7 @@ impl TTS {
         Self {
             voicevox_client,
             gcp_tts_client,
-            cache: RwLock::new(LruCache::new(NonZeroUsize::new(100).unwrap())),
+            cache: RwLock::new(LruCache::new(NonZeroUsize::new(1000).unwrap())),
         }
     }
 
