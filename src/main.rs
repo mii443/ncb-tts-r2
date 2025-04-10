@@ -14,6 +14,7 @@ use config::Config;
 use data::{DatabaseClientData, TTSClientData, TTSData};
 use database::database::Database;
 use event_handler::Handler;
+#[allow(deprecated)]
 use serenity::{
     all::{standard::Configuration, ApplicationId},
     client::Client,
@@ -35,6 +36,7 @@ use songbird::SerenityInit;
 ///
 /// client.start().await;
 /// ```
+#[allow(deprecated)]
 async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, serenity::Error> {
     let framework = StandardFramework::new();
     framework.configure(Configuration::new().with_whitespace(true).prefix(prefix));
