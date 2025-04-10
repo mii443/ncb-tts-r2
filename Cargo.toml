@@ -18,6 +18,12 @@ regex = "1"
 tracing-subscriber = "0.3.19"
 lru = "0.13.0"
 tracing = "0.1.41"
+opentelemetry_sdk = { version = "0.29.0", features = ["trace"] }
+opentelemetry = "0.29.1"
+opentelemetry-semantic-conventions = "0.29.0"
+opentelemetry-otlp = { version = "0.29.0", features = ["grpc-tonic"] }
+opentelemetry-stdout = "0.29.0"
+tracing-opentelemetry = "0.30.0"
 
 [dependencies.uuid]
 version = "0.8"

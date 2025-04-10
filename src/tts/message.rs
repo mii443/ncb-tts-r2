@@ -29,6 +29,7 @@ pub trait TTSMessage {
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Compressed>;
 }
 
+#[derive(Debug, Clone)]
 pub struct AnnounceMessage {
     pub message: String,
 }

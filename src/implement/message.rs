@@ -4,7 +4,9 @@ use serenity::{model::prelude::Message, prelude::Context};
 use songbird::input::cached::Compressed;
 
 use crate::{
-    data::{DatabaseClientData, TTSClientData}, implement::member_name::ReadName, tts::{
+    data::{DatabaseClientData, TTSClientData},
+    implement::member_name::ReadName,
+    tts::{
         gcp_tts::structs::{
             audio_config::AudioConfig, synthesis_input::SynthesisInput,
             synthesize_request::SynthesizeRequest,
@@ -12,7 +14,7 @@ use crate::{
         instance::TTSInstance,
         message::TTSMessage,
         tts_type::TTSType,
-    }
+    },
 };
 
 #[async_trait]
@@ -48,7 +50,11 @@ impl TTSMessage for Message {
                 let member = self.member.clone();
                 let name = if let Some(_) = member {
                     let guild = ctx.cache.guild(self.guild_id.unwrap()).unwrap().clone();
-                    guild.member(&ctx.http, self.author.id).await.unwrap().read_name()
+                    guild
+                        .member(&ctx.http, self.author.id)
+                        .await
+                        .unwrap()
+                        .read_name()
                 } else {
                     self.author.read_name()
                 };
@@ -58,7 +64,11 @@ impl TTSMessage for Message {
             let member = self.member.clone();
             let name = if let Some(_) = member {
                 let guild = ctx.cache.guild(self.guild_id.unwrap()).unwrap().clone();
-                guild.member(&ctx.http, self.author.id).await.unwrap().read_name()
+                guild
+                    .member(&ctx.http, self.author.id)
+                    .await
+                    .unwrap()
+                    .read_name()
             } else {
                 self.author.read_name()
             };

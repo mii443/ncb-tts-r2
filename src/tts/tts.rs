@@ -5,8 +5,18 @@ use lru::LruCache;
 use songbird::{driver::Bitrate, input::cached::Compressed};
 use tracing::info;
 
-use super::{gcp_tts::{gcp_tts::GCPTTS, structs::{synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest, voice_selection_params::VoiceSelectionParams}}, voicevox::voicevox::VOICEVOX};
+use super::{
+    gcp_tts::{
+        gcp_tts::GCPTTS,
+        structs::{
+            synthesis_input::SynthesisInput, synthesize_request::SynthesizeRequest,
+            voice_selection_params::VoiceSelectionParams,
+        },
+    },
+    voicevox::voicevox::VOICEVOX,
+};
 
+#[derive(Debug)]
 pub struct TTS {
     pub voicevox_client: VOICEVOX,
     gcp_tts_client: GCPTTS,
@@ -20,10 +30,7 @@ pub enum CacheKey {
 }
 
 impl TTS {
-    pub fn new(
-        voicevox_client: VOICEVOX,
-        gcp_tts_client: GCPTTS,
-    ) -> Self {
+    pub fn new(voicevox_client: VOICEVOX, gcp_tts_client: GCPTTS) -> Self {
         Self {
             voicevox_client,
             gcp_tts_client,
@@ -31,7 +38,12 @@ impl TTS {
         }
     }
 
-    pub async fn synthesize_voicevox(&self, text: &str, speaker: i64) -> Result<Compressed, Box<dyn std::error::Error>> {
+    #[tracing::instrument]
+    pub async fn synthesize_voicevox(
+        &self,
+        text: &str,
+        speaker: i64,
+    ) -> Result<Compressed, Box<dyn std::error::Error>> {
         let cache_key = CacheKey::Voicevox(text.to_string(), speaker);
 
         let cached_audio = {
@@ -43,15 +55,16 @@ impl TTS {
             info!("Cache hit for VOICEVOX TTS");
             return Ok(audio);
         }
-        
+
         info!("Cache miss for VOICEVOX TTS");
 
-        let audio = self.voicevox_client
+        let audio = self
+            .voicevox_client
             .synthesize(text.to_string(), speaker)
             .await?;
 
         let compressed = Compressed::new(audio.into(), Bitrate::Auto).await?;
-        
+
         {
             let mut cache_guard = self.cache.write().unwrap();
             cache_guard.put(cache_key, compressed.clone());
@@ -60,7 +73,11 @@ impl TTS {
         Ok(compressed)
     }
 
-    pub async fn synthesize_gcp(&self, synthesize_request: SynthesizeRequest) -> Result<Compressed, Box<dyn std::error::Error>> {
+    #[tracing::instrument]
+    pub async fn synthesize_gcp(
+        &self,
+        synthesize_request: SynthesizeRequest,
+    ) -> Result<Compressed, Box<dyn std::error::Error>> {
         let cache_key = CacheKey::GCP(
             synthesize_request.input.clone(),
             synthesize_request.voice.clone(),
@@ -75,15 +92,13 @@ impl TTS {
             info!("Cache hit for GCP TTS");
             return Ok(audio);
         }
-        
+
         info!("Cache miss for GCP TTS");
 
-        let audio = self.gcp_tts_client
-            .synthesize(synthesize_request)
-            .await?;
+        let audio = self.gcp_tts_client.synthesize(synthesize_request).await?;
 
         let compressed = Compressed::new(audio.into(), Bitrate::Auto).await?;
-    
+
         {
             let mut cache_guard = self.cache.write().unwrap();
             cache_guard.put(cache_key, compressed.clone());

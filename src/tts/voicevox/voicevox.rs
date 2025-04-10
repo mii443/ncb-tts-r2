@@ -2,12 +2,13 @@ use super::structs::speaker::Speaker;
 
 const BASE_API_URL: &str = "https://deprecatedapis.tts.quest/v2/";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VOICEVOX {
     pub key: String,
 }
 
 impl VOICEVOX {
+    #[tracing::instrument]
     pub async fn get_styles(&self) -> Vec<(String, i64)> {
         let speakers = self.get_speaker_list().await;
         let mut speaker_list = vec![];
@@ -20,6 +21,7 @@ impl VOICEVOX {
         speaker_list
     }
 
+    #[tracing::instrument]
     pub async fn get_speakers(&self) -> Vec<String> {
         let speakers = self.get_speaker_list().await;
         let mut speaker_list = vec![];
@@ -34,6 +36,7 @@ impl VOICEVOX {
         Self { key }
     }
 
+    #[tracing::instrument]
     async fn get_speaker_list(&self) -> Vec<Speaker> {
         let client = reqwest::Client::new();
         match client
@@ -49,6 +52,7 @@ impl VOICEVOX {
         }
     }
 
+    #[tracing::instrument]
     pub async fn synthesize(
         &self,
         text: String,

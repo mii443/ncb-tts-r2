@@ -1,7 +1,4 @@
-use crate::{
-    database::database::Database,
-    tts::tts::TTS,
-};
+use crate::{database::database::Database, tts::tts::TTS};
 use serenity::{
     futures::lock::Mutex,
     model::id::GuildId,

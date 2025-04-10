@@ -1,6 +1,6 @@
 use serenity::model::{
+    guild::{Member, PartialMember},
     user::User,
-    guild::{Member, PartialMember}
 };
 
 pub trait ReadName {
@@ -15,7 +15,9 @@ impl ReadName for Member {
 
 impl ReadName for PartialMember {
     fn read_name(&self) -> String {
-        self.nick.clone().unwrap_or(self.user.as_ref().unwrap().display_name().to_string())
+        self.nick
+            .clone()
+            .unwrap_or(self.user.as_ref().unwrap().display_name().to_string())
     }
 }
 

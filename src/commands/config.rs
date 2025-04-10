@@ -1,6 +1,8 @@
 use serenity::{
     all::{
-        ButtonStyle, CommandInteraction, CreateActionRow, CreateButton, CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption
+        ButtonStyle, CommandInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,
+        CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
+        CreateSelectMenuOption,
     },
     prelude::Context,
 };
@@ -10,6 +12,7 @@ use crate::{
     tts::tts_type::TTSType,
 };
 
+#[tracing::instrument]
 pub async fn config_command(
     ctx: &Context,
     command: &CommandInteraction,
@@ -38,53 +41,59 @@ pub async fn config_command(
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);
 
     let engine_select = CreateActionRow::SelectMenu(
-        CreateSelectMenu::new("TTS_CONFIG_ENGINE", CreateSelectMenuKind::String { options: vec![
-            CreateSelectMenuOption::new("Google TTS", "TTS_CONFIG_ENGINE_SELECTED_GOOGLE")
-                .default_selection(tts_type == TTSType::GCP),
-            CreateSelectMenuOption::new("VOICEVOX", "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX")
-                .default_selection(tts_type == TTSType::VOICEVOX)
-        ] }).placeholder("読み上げAPIを選択")
+        CreateSelectMenu::new(
+            "TTS_CONFIG_ENGINE",
+            CreateSelectMenuKind::String {
+                options: vec![
+                    CreateSelectMenuOption::new("Google TTS", "TTS_CONFIG_ENGINE_SELECTED_GOOGLE")
+                        .default_selection(tts_type == TTSType::GCP),
+                    CreateSelectMenuOption::new("VOICEVOX", "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX")
+                        .default_selection(tts_type == TTSType::VOICEVOX),
+                ],
+            },
+        )
+        .placeholder("読み上げAPIを選択"),
     );
 
-    let server_button = CreateActionRow::Buttons(vec![
-        CreateButton::new("TTS_CONFIG_SERVER")
-            .label("サーバー設定")
-            .style(ButtonStyle::Primary)
-    ]);
+    let server_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_SERVER")
+        .label("サーバー設定")
+        .style(ButtonStyle::Primary)]);
 
     let mut components = vec![engine_select, server_button];
 
     for (index, speaker_chunk) in voicevox_speakers[0..24].chunks(25).enumerate() {
         let mut options = Vec::new();
-        
+
         for (name, id) in speaker_chunk {
             options.push(
                 CreateSelectMenuOption::new(
-                    name, 
-                    format!("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_{}", id)
-                ).default_selection(*id == voicevox_speaker)
+                    name,
+                    format!("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_{}", id),
+                )
+                .default_selection(*id == voicevox_speaker),
             );
         }
-        
-        components.push(
-            CreateActionRow::SelectMenu(
-                CreateSelectMenu::new(
-                    format!("TTS_CONFIG_VOICEVOX_SPEAKER_{}", index),
-                    CreateSelectMenuKind::String { options }
-                ).placeholder("VOICEVOX Speakerを指定")
+
+        components.push(CreateActionRow::SelectMenu(
+            CreateSelectMenu::new(
+                format!("TTS_CONFIG_VOICEVOX_SPEAKER_{}", index),
+                CreateSelectMenuKind::String { options },
             )
-        );
+            .placeholder("VOICEVOX Speakerを指定"),
+        ));
     }
 
     command
-        .create_response(&ctx.http, 
+        .create_response(
+            &ctx.http,
             CreateInteractionResponse::Message(
                 CreateInteractionResponseMessage::new()
                     .content("読み上げ設定")
                     .components(components)
-                    .ephemeral(true)
-            ))
+                    .ephemeral(true),
+            ),
+        )
         .await?;
-    
+
     Ok(())
 }

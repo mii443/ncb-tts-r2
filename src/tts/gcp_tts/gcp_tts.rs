@@ -1,17 +1,18 @@
-use tokio::sync::RwLock;
-use std::sync::Arc;
 use crate::tts::gcp_tts::structs::{
     synthesize_request::SynthesizeRequest, synthesize_response::SynthesizeResponse,
 };
 use gcp_auth::Token;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GCPTTS {
     pub token: Arc<RwLock<Token>>,
     pub credentials_path: String,
 }
 
 impl GCPTTS {
+    #[tracing::instrument]
     pub async fn update_token(&self) -> Result<(), gcp_auth::Error> {
         let mut token = self.token.write().await;
         if token.has_expired() {
@@ -26,6 +27,7 @@ impl GCPTTS {
         Ok(())
     }
 
+    #[tracing::instrument]
     pub async fn new(credentials_path: String) -> Result<Self, gcp_auth::Error> {
         let authenticator = gcp_auth::from_credentials_file(credentials_path.clone()).await?;
         let token = authenticator
@@ -59,18 +61,19 @@ impl GCPTTS {
     ///    }
     /// }).await.unwrap();
     /// ```
+    #[tracing::instrument]
     pub async fn synthesize(
         &self,
         request: SynthesizeRequest,
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         self.update_token().await.unwrap();
         let client = reqwest::Client::new();
-        
+
         let token_string = {
             let token = self.token.read().await;
             token.as_str().to_string()
         };
-        
+
         match client
             .post("https://texttospeech.googleapis.com/v1/text:synthesize")
             .header(reqwest::header::CONTENT_TYPE, "application/json")

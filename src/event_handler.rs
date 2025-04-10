@@ -8,19 +8,31 @@ use crate::{
     tts::tts_type::TTSType,
 };
 use serenity::{
-    all::{ActionRowComponent, ButtonStyle, ComponentInteractionDataKind, CreateActionRow, CreateButton, CreateEmbed, CreateInputText, CreateInteractionResponse, CreateInteractionResponseMessage, CreateModal, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputTextStyle}, async_trait, client::{Context, EventHandler}, model::{
-        application::Interaction, channel::Message, gateway::Ready, prelude::ChannelType, voice::VoiceState
-    }
+    all::{
+        ActionRowComponent, ButtonStyle, ComponentInteractionDataKind, CreateActionRow,
+        CreateButton, CreateEmbed, CreateInputText, CreateInteractionResponse,
+        CreateInteractionResponseMessage, CreateModal, CreateSelectMenu, CreateSelectMenuKind,
+        CreateSelectMenuOption, InputTextStyle,
+    },
+    async_trait,
+    client::{Context, EventHandler},
+    model::{
+        application::Interaction, channel::Message, gateway::Ready, prelude::ChannelType,
+        voice::VoiceState,
+    },
 };
 
+#[derive(Clone, Debug)]
 pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
+    #[tracing::instrument]
     async fn message(&self, ctx: Context, message: Message) {
         events::message_receive::message(ctx, message).await
     }
 
+    #[tracing::instrument]
     async fn ready(&self, ctx: Context, ready: Ready) {
         events::ready::ready(ctx, ready).await
     }
@@ -95,10 +107,15 @@ impl EventHandler for Handler {
                     .await
                     .unwrap();
                 modal
-                    .create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(CreateInteractionResponseMessage::new().content(format!(
-                        "辞書を追加しました\n名前: {}\n変換元: {}\n変換後: {}",
-                        rule_name, from, to
-                    ))))
+                    .create_response(
+                        &ctx.http,
+                        CreateInteractionResponse::UpdateMessage(
+                            CreateInteractionResponseMessage::new().content(format!(
+                                "辞書を追加しました\n名前: {}\n変換元: {}\n変換後: {}",
+                                rule_name, from, to
+                            )),
+                        ),
+                    )
                     .await
                     .unwrap();
             }
@@ -106,12 +123,16 @@ impl EventHandler for Handler {
         if let Some(message_component) = interaction.message_component() {
             match &*message_component.data.custom_id {
                 "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU" => {
-                    let i = usize::from_str_radix(&match message_component.data.kind {
-                        ComponentInteractionDataKind::StringSelect { ref values, .. } => {
-                            values[0].clone()
-                        }
-                        _ => panic!("Cannot get index"),
-                    }, 10).unwrap();
+                    let i = usize::from_str_radix(
+                        &match message_component.data.kind {
+                            ComponentInteractionDataKind::StringSelect { ref values, .. } => {
+                                values[0].clone()
+                            }
+                            _ => panic!("Cannot get index"),
+                        },
+                        10,
+                    )
+                    .unwrap();
                     let data_read = ctx.data.read().await;
 
                     let mut config = {
@@ -141,8 +162,13 @@ impl EventHandler for Handler {
                     }
 
                     message_component
-                        .create_response(&ctx, 
-                            CreateInteractionResponse::UpdateMessage(CreateInteractionResponseMessage::new().content("辞書を削除しました")))
+                        .create_response(
+                            &ctx,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new()
+                                    .content("辞書を削除しました"),
+                            ),
+                        )
                         .await
                         .unwrap();
                 }
@@ -163,38 +189,40 @@ impl EventHandler for Handler {
                     };
 
                     message_component
-                        .create_response(&ctx.http, 
+                        .create_response(
+                            &ctx.http,
                             CreateInteractionResponse::UpdateMessage(
                                 CreateInteractionResponseMessage::new()
                                     .content("削除する辞書内容を選択してください")
-                                    .components(vec![
-                                        CreateActionRow::SelectMenu(
-                                            CreateSelectMenu::new(
-                                                "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU", 
-                                                CreateSelectMenuKind::String { 
-                                                    options: {
-                                                        let mut options = vec![];
-                                                        for (i, rule) in config
-                                                            .dictionary
-                                                            .rules
-                                                            .iter()
-                                                            .enumerate()
-                                                        {
-                                                            let option = CreateSelectMenuOption::new(rule.id.clone(), i.to_string()).description(format!(
-                                                                "{} -> {}",
-                                                                rule.rule.clone(),
-                                                                rule.to.clone()
-                                                            ));
-                                                            options.push(option);
-                                                        }
-                                                        options
+                                    .components(vec![CreateActionRow::SelectMenu(
+                                        CreateSelectMenu::new(
+                                            "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU",
+                                            CreateSelectMenuKind::String {
+                                                options: {
+                                                    let mut options = vec![];
+                                                    for (i, rule) in
+                                                        config.dictionary.rules.iter().enumerate()
+                                                    {
+                                                        let option = CreateSelectMenuOption::new(
+                                                            rule.id.clone(),
+                                                            i.to_string(),
+                                                        )
+                                                        .description(format!(
+                                                            "{} -> {}",
+                                                            rule.rule.clone(),
+                                                            rule.to.clone()
+                                                        ));
+                                                        options.push(option);
                                                     }
-                                                 })
-                                                 .max_values(1)
-                                                .min_values(0)
+                                                    options
+                                                },
+                                            },
                                         )
-                                    ])
-                                ))
+                                        .max_values(1)
+                                        .min_values(0),
+                                    )]),
+                            ),
+                        )
                         .await
                         .unwrap();
                 }
@@ -214,12 +242,11 @@ impl EventHandler for Handler {
                     };
 
                     message_component
-                        .create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(
-                            CreateInteractionResponseMessage::new()
-                                .content("")
-                                .embed(CreateEmbed::new()
-                                    .title("辞書一覧")
-                                    .fields({
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new().content("").embed(
+                                    CreateEmbed::new().title("辞書一覧").fields({
                                         let mut fields = vec![];
                                         for rule in config.dictionary.rules {
                                             let field = (
@@ -230,14 +257,17 @@ impl EventHandler for Handler {
                                             fields.push(field);
                                         }
                                         fields
-                                    }))
-                        ))
+                                    }),
+                                ),
+                            ),
+                        )
                         .await
                         .unwrap();
                 }
                 "TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON" => {
                     message_component
-                        .create_response(&ctx.http, 
+                        .create_response(
+                            &ctx.http,
                             CreateInteractionResponse::Modal(
                                 CreateModal::new("TTS_CONFIG_SERVER_ADD_DICTIONARY", "辞書追加")
                                     .components({
@@ -246,29 +276,30 @@ impl EventHandler for Handler {
                                                 CreateInputText::new(
                                                     InputTextStyle::Short,
                                                     "rule_name",
-                                                    "辞書名"
+                                                    "辞書名",
                                                 )
-                                                .required(true)
+                                                .required(true),
                                             ),
                                             CreateActionRow::InputText(
                                                 CreateInputText::new(
                                                     InputTextStyle::Paragraph,
                                                     "from",
-                                                    "変換元（正規表現）"
+                                                    "変換元（正規表現）",
                                                 )
-                                                .required(true)
+                                                .required(true),
                                             ),
                                             CreateActionRow::InputText(
                                                 CreateInputText::new(
                                                     InputTextStyle::Short,
                                                     "to",
-                                                    "変換先"
+                                                    "変換先",
                                                 )
-                                                .required(true)
-                                            )
+                                                .required(true),
+                                            ),
                                         ]
-                                    })
-                            ))
+                                    }),
+                            ),
+                        )
                         .await
                         .unwrap();
                 }
@@ -278,7 +309,13 @@ impl EventHandler for Handler {
                             if values.len() == 0 {
                                 None
                             } else {
-                                Some(u64::from_str_radix(&values[0].strip_prefix("SET_AUTOSTART_CHANNEL_").unwrap(), 10).unwrap())
+                                Some(
+                                    u64::from_str_radix(
+                                        &values[0].strip_prefix("SET_AUTOSTART_CHANNEL_").unwrap(),
+                                        10,
+                                    )
+                                    .unwrap(),
+                                )
                             }
                         }
                         _ => panic!("Cannot get index"),
@@ -303,7 +340,13 @@ impl EventHandler for Handler {
                     };
 
                     message_component
-                        .create_response(&ctx.http, CreateInteractionResponse::UpdateMessage(CreateInteractionResponseMessage::new().content("自動参加チャンネルを設定しました。")))
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new()
+                                    .content("自動参加チャンネルを設定しました。"),
+                            ),
+                        )
                         .await
                         .unwrap();
                 }
@@ -336,70 +379,82 @@ impl EventHandler for Handler {
                         if channel.kind != ChannelType::Voice {
                             continue;
                         }
-                        
-                        let description = channel.topic.unwrap_or_else(|| String::from("No topic provided."));
+
+                        let description = channel
+                            .topic
+                            .unwrap_or_else(|| String::from("No topic provided."));
                         let option = CreateSelectMenuOption::new(
                             &channel.name,
-                            format!("SET_AUTOSTART_CHANNEL_{}", id.get())
+                            format!("SET_AUTOSTART_CHANNEL_{}", id.get()),
                         )
                         .description(description)
                         .default_selection(channel.id.get() == autostart_channel_id);
-                        
+
                         options.push(option);
                     }
 
                     message_component
-                        .create_response(&ctx.http, 
+                        .create_response(
+                            &ctx.http,
                             CreateInteractionResponse::UpdateMessage(
                                 CreateInteractionResponseMessage::new()
                                     .content("自動参加チャンネル設定")
-                                    .components(vec![
-                                        CreateActionRow::SelectMenu(
-                                            CreateSelectMenu::new(
-                                                "SET_AUTOSTART_CHANNEL",
-                                                CreateSelectMenuKind::String { options }
-                                            )
-                                            .min_values(0)
-                                            .max_values(1)
+                                    .components(vec![CreateActionRow::SelectMenu(
+                                        CreateSelectMenu::new(
+                                            "SET_AUTOSTART_CHANNEL",
+                                            CreateSelectMenuKind::String { options },
                                         )
-                                    ])
-                            ))
+                                        .min_values(0)
+                                        .max_values(1),
+                                    )]),
+                            ),
+                        )
                         .await
                         .unwrap();
-                },
+                }
                 "TTS_CONFIG_SERVER" => {
                     message_component
-                        .create_response(&ctx.http, 
+                        .create_response(
+                            &ctx.http,
                             CreateInteractionResponse::UpdateMessage(
                                 CreateInteractionResponseMessage::new()
                                     .content("サーバー設定")
-                                    .components(vec![
-                                        CreateActionRow::Buttons(vec![
-                                            CreateButton::new("TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON")
-                                                .label("辞書を追加")
-                                                .style(ButtonStyle::Primary),
-                                            CreateButton::new("TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON")
-                                                .label("辞書を削除")
-                                                .style(ButtonStyle::Danger),
-                                            CreateButton::new("TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON")
-                                                .label("辞書一覧")
-                                                .style(ButtonStyle::Primary),
-                                            CreateButton::new("TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL")
-                                                .label("自動参加チャンネル")
-                                                .style(ButtonStyle::Primary)
-                                        ])
-                                    ])
-                            ))
+                                    .components(vec![CreateActionRow::Buttons(vec![
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON",
+                                        )
+                                        .label("辞書を追加")
+                                        .style(ButtonStyle::Primary),
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON",
+                                        )
+                                        .label("辞書を削除")
+                                        .style(ButtonStyle::Danger),
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON",
+                                        )
+                                        .label("辞書一覧")
+                                        .style(ButtonStyle::Primary),
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL",
+                                        )
+                                        .label("自動参加チャンネル")
+                                        .style(ButtonStyle::Primary),
+                                    ])]),
+                            ),
+                        )
                         .await
                         .unwrap();
                 }
                 _ => {}
             }
             match message_component.data.kind {
-                ComponentInteractionDataKind::StringSelect { ref values, .. } if !values.is_empty() => {
+                ComponentInteractionDataKind::StringSelect { ref values, .. }
+                    if !values.is_empty() =>
+                {
                     let res = &values[0].clone();
                     let data_read = ctx.data.read().await;
-            
+
                     let mut config = {
                         let database = data_read
                             .get::<DatabaseClientData>()
@@ -412,10 +467,10 @@ impl EventHandler for Handler {
                             .unwrap()
                             .unwrap()
                     };
-            
+
                     let mut config_changed = false;
                     let mut voicevox_changed = false;
-                    
+
                     match res.as_str() {
                         "TTS_CONFIG_ENGINE_SELECTED_GOOGLE" => {
                             config.tts_type = Some(TTSType::GCP);
@@ -431,14 +486,14 @@ impl EventHandler for Handler {
                                     .strip_prefix("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_")
                                     .and_then(|id_str| id_str.parse::<i64>().ok())
                                     .expect("Invalid speaker ID format");
-                                
+
                                 config.voicevox_speaker = Some(speaker_id);
                                 config_changed = true;
                                 voicevox_changed = true;
                             }
                         }
                     }
-            
+
                     if config_changed {
                         let database = data_read
                             .get::<DatabaseClientData>()
@@ -449,26 +504,29 @@ impl EventHandler for Handler {
                             .set_user_config(message_component.user.id.get(), config.clone())
                             .await
                             .unwrap();
-            
-                        let response_content = if voicevox_changed && config.tts_type.unwrap_or(TTSType::GCP) == TTSType::GCP {
+
+                        let response_content = if voicevox_changed
+                            && config.tts_type.unwrap_or(TTSType::GCP) == TTSType::GCP
+                        {
                             "設定しました\nこの音声を使うにはAPIをGoogleからVOICEVOXに変更する必要があります。"
                         } else {
                             "設定しました"
                         };
-            
+
                         message_component
-                            .create_response(&ctx.http, 
+                            .create_response(
+                                &ctx.http,
                                 CreateInteractionResponse::Message(
                                     CreateInteractionResponseMessage::new()
                                         .content(response_content)
-                                        .ephemeral(true)
-                                ))
+                                        .ephemeral(true),
+                                ),
+                            )
                             .await
                             .unwrap();
                     }
-                },
-                _ => {
                 }
+                _ => {}
             }
         }
     }

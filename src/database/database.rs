@@ -5,6 +5,7 @@ use crate::tts::{
 use super::{dictionary::Dictionary, server_config::ServerConfig, user_config::UserConfig};
 use redis::Commands;
 
+#[derive(Debug, Clone)]
 pub struct Database {
     pub client: redis::Client,
 }
@@ -14,6 +15,7 @@ impl Database {
         Self { client }
     }
 
+    #[tracing::instrument]
     pub async fn get_server_config(
         &mut self,
         server_id: u64,
@@ -32,6 +34,7 @@ impl Database {
         }
     }
 
+    #[tracing::instrument]
     pub async fn get_user_config(
         &mut self,
         user_id: u64,
@@ -50,6 +53,7 @@ impl Database {
         }
     }
 
+    #[tracing::instrument]
     pub async fn set_server_config(
         &mut self,
         server_id: u64,
@@ -64,6 +68,7 @@ impl Database {
         Ok(())
     }
 
+    #[tracing::instrument]
     pub async fn set_user_config(
         &mut self,
         user_id: u64,
@@ -78,20 +83,25 @@ impl Database {
         Ok(())
     }
 
+    #[tracing::instrument]
     pub async fn set_default_server_config(&mut self, server_id: u64) -> redis::RedisResult<()> {
         let config = ServerConfig {
             dictionary: Dictionary::new(),
             autostart_channel_id: None,
         };
 
-        self.client.get_connection().unwrap().set::<String, String, ()>(
-            format!("discord_server:{}", server_id),
-            serde_json::to_string(&config).unwrap(),
-        )?;
+        self.client
+            .get_connection()
+            .unwrap()
+            .set::<String, String, ()>(
+                format!("discord_server:{}", server_id),
+                serde_json::to_string(&config).unwrap(),
+            )?;
 
         Ok(())
     }
 
+    #[tracing::instrument]
     pub async fn set_default_user_config(&mut self, user_id: u64) -> redis::RedisResult<()> {
         let voice_selection = VoiceSelectionParams {
             languageCode: String::from("ja-JP"),
@@ -107,14 +117,18 @@ impl Database {
             voicevox_speaker: Some(1),
         };
 
-        self.client.get_connection().unwrap().set::<String, String, ()>(
-            format!("discord_user:{}", user_id),
-            serde_json::to_string(&config).unwrap(),
-        )?;
+        self.client
+            .get_connection()
+            .unwrap()
+            .set::<String, String, ()>(
+                format!("discord_user:{}", user_id),
+                serde_json::to_string(&config).unwrap(),
+            )?;
 
         Ok(())
     }
 
+    #[tracing::instrument]
     pub async fn get_server_config_or_default(
         &mut self,
         server_id: u64,
@@ -129,6 +143,7 @@ impl Database {
         }
     }
 
+    #[tracing::instrument]
     pub async fn get_user_config_or_default(
         &mut self,
         user_id: u64,

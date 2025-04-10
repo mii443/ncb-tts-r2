@@ -5,6 +5,7 @@ mod database;
 mod event_handler;
 mod events;
 mod implement;
+mod trace;
 mod tts;
 
 use std::{collections::HashMap, env, sync::Arc};
@@ -14,9 +15,14 @@ use data::{DatabaseClientData, TTSClientData, TTSData};
 use database::database::Database;
 use event_handler::Handler;
 use serenity::{
-    all::{standard::Configuration, ApplicationId}, client::Client, framework::StandardFramework, futures::lock::Mutex, prelude::{GatewayIntents, RwLock}
+    all::{standard::Configuration, ApplicationId},
+    client::Client,
+    framework::StandardFramework,
+    futures::lock::Mutex,
+    prelude::{GatewayIntents, RwLock},
 };
-use tracing::Level;
+use trace::init_tracing_subscriber;
+use tracing::info;
 use tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX};
 
 use songbird::SerenityInit;
@@ -43,7 +49,7 @@ async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, ser
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    let _guard = init_tracing_subscriber();
     // Load config
     let config = {
         let config = std::fs::read_to_string("./config.toml");
@@ -91,6 +97,8 @@ async fn main() {
         data.insert::<TTSClientData>(Arc::new(TTS::new(voicevox, tts)));
         data.insert::<DatabaseClientData>(Arc::new(Mutex::new(database_client)));
     }
+
+    info!("Bot initialized.");
 
     // Run client
     if let Err(why) = client.start().await {

@@ -5,17 +5,19 @@ use serenity::{
     model::prelude::UserId,
     prelude::Context,
 };
+use tracing::info;
 
 use crate::{
     data::{TTSClientData, TTSData},
     tts::instance::TTSInstance,
 };
 
+#[tracing::instrument]
 pub async fn setup_command(
     ctx: &Context,
     command: &CommandInteraction,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Received event");
+    info!("Received event");
     
     if command.guild_id.is_none() {
         command
@@ -29,7 +31,7 @@ pub async fn setup_command(
         return Ok(());
     }
 
-    println!("Fetching guild cache");
+    info!("Fetching guild cache");
     let guild_id = command.guild_id.unwrap();
     let guild = guild_id.to_guild_cached(&ctx.cache).unwrap().clone();
 
