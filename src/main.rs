@@ -49,7 +49,6 @@ async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client, ser
 
 #[tokio::main]
 async fn main() {
-    let _guard = init_tracing_subscriber();
     // Load config
     let config = {
         let config = std::fs::read_to_string("./config.toml");
@@ -61,6 +60,10 @@ async fn main() {
             let prefix = env::var("NCB_PREFIX").unwrap();
             let redis_url = env::var("NCB_REDIS_URL").unwrap();
             let voicevox_key = env::var("NCB_VOICEVOX_KEY").unwrap();
+            let otel_http_url = match env::var("NCB_OTEL_HTTP_URL") {
+                Ok(url) => Some(url),
+                Err(_) => None,
+            };
 
             Config {
                 token,
@@ -68,9 +71,12 @@ async fn main() {
                 prefix,
                 redis_url,
                 voicevox_key,
+                otel_http_url,
             }
         }
     };
+
+    let _guard = init_tracing_subscriber(&config.otel_http_url);
 
     // Create discord client
     let mut client = create_client(&config.prefix, &config.token, config.application_id)

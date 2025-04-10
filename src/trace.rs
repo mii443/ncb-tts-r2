@@ -3,6 +3,7 @@ use opentelemetry::{
     trace::{SamplingDecision, SamplingResult, TraceContextExt, TraceState, TracerProvider as _},
     KeyValue,
 };
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::{
     metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
     trace::{RandomIdGenerator, SdkTracerProvider, ShouldSample},
@@ -50,9 +51,10 @@ fn resource() -> Resource {
     Resource::builder().with_service_name("ncb-tts-r2").build()
 }
 
-fn init_meter_provider() -> SdkMeterProvider {
+fn init_meter_provider(url: &str) -> SdkMeterProvider {
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_http()
+        .with_endpoint(url)
         .with_temporality(opentelemetry_sdk::metrics::Temporality::default())
         .build()
         .unwrap();
@@ -75,9 +77,10 @@ fn init_meter_provider() -> SdkMeterProvider {
     meter_provider
 }
 
-fn init_tracer_provider() -> SdkTracerProvider {
+fn init_tracer_provider(url: &str) -> SdkTracerProvider {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
+        .with_endpoint(url)
         .build()
         .unwrap();
 
@@ -89,28 +92,38 @@ fn init_tracer_provider() -> SdkTracerProvider {
         .build()
 }
 
-pub fn init_tracing_subscriber() -> OtelGuard {
-    let tracer_provider = init_tracer_provider();
-    let meter_provider = init_meter_provider();
+pub fn init_tracing_subscriber(otel_http_url: &Option<String>) -> OtelGuard {
+    let mut registry = tracing_subscriber::registry().with(
+        tracing_subscriber::filter::LevelFilter::from_level(Level::INFO),
+    );
 
-    let tracer = tracer_provider.tracer("ncb-tts-r2");
+    if let Some(url) = otel_http_url {
+        let tracer_provider = init_tracer_provider(url);
+        let meter_provider = init_meter_provider(url);
 
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::filter::LevelFilter::from_level(
-            Level::INFO,
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .with(MetricsLayer::new(meter_provider.clone()))
-        .with(OpenTelemetryLayer::new(tracer))
-        .init();
+        let tracer = tracer_provider.tracer("ncb-tts-r2");
 
-    OtelGuard {
-        _tracer_provider: tracer_provider,
-        _meter_provider: meter_provider,
+        registry
+            .with(tracing_subscriber::fmt::layer())
+            .with(MetricsLayer::new(meter_provider.clone()))
+            .with(OpenTelemetryLayer::new(tracer))
+            .init();
+
+        OtelGuard {
+            _tracer_provider: Some(tracer_provider),
+            _meter_provider: Some(meter_provider),
+        }
+    } else {
+        registry.with(tracing_subscriber::fmt::layer()).init();
+
+        OtelGuard {
+            _tracer_provider: None,
+            _meter_provider: None,
+        }
     }
 }
 
 pub struct OtelGuard {
-    _tracer_provider: SdkTracerProvider,
-    _meter_provider: SdkMeterProvider,
+    _tracer_provider: Option<SdkTracerProvider>,
+    _meter_provider: Option<SdkMeterProvider>,
 }
