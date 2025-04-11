@@ -1,8 +1,8 @@
-use std::num::NonZeroUsize;
 use std::sync::RwLock;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use lru::LruCache;
-use songbird::{driver::Bitrate, input::cached::Compressed};
+use songbird::{driver::Bitrate, input::cached::Compressed, tracks::Track};
 use tracing::info;
 
 use super::{
@@ -20,7 +20,7 @@ use super::{
 pub struct TTS {
     pub voicevox_client: VOICEVOX,
     gcp_tts_client: GCPTTS,
-    cache: RwLock<LruCache<CacheKey, Compressed>>,
+    cache: Arc<RwLock<LruCache<CacheKey, Compressed>>>,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -34,7 +34,7 @@ impl TTS {
         Self {
             voicevox_client,
             gcp_tts_client,
-            cache: RwLock::new(LruCache::new(NonZeroUsize::new(1000).unwrap())),
+            cache: Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(1000).unwrap()))),
         }
     }
 
@@ -43,7 +43,7 @@ impl TTS {
         &self,
         text: &str,
         speaker: i64,
-    ) -> Result<Compressed, Box<dyn std::error::Error>> {
+    ) -> Result<Track, Box<dyn std::error::Error>> {
         let cache_key = CacheKey::Voicevox(text.to_string(), speaker);
 
         let cached_audio = {
@@ -53,24 +53,27 @@ impl TTS {
 
         if let Some(audio) = cached_audio {
             info!("Cache hit for VOICEVOX TTS");
-            return Ok(audio);
+            return Ok(audio.into());
         }
 
         info!("Cache miss for VOICEVOX TTS");
-
         let audio = self
             .voicevox_client
-            .synthesize(text.to_string(), speaker)
+            .synthesize_stream(text.to_string(), speaker)
             .await?;
 
-        let compressed = Compressed::new(audio.into(), Bitrate::Auto).await?;
+        tokio::spawn({
+            let cache = self.cache.clone();
+            let audio = audio.clone();
+            async move {
+                info!("Compressing stream audio");
+                let compressed = Compressed::new(audio.into(), Bitrate::Auto).await.unwrap();
+                let mut cache_guard = cache.write().unwrap();
+                cache_guard.put(cache_key, compressed.clone());
+            }
+        });
 
-        {
-            let mut cache_guard = self.cache.write().unwrap();
-            cache_guard.put(cache_key, compressed.clone());
-        }
-
-        Ok(compressed)
+        Ok(audio.into())
     }
 
     #[tracing::instrument]

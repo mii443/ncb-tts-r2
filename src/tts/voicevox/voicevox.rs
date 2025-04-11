@@ -1,4 +1,6 @@
-use super::structs::speaker::Speaker;
+use crate::stream_input::Mp3Request;
+
+use super::structs::{speaker::Speaker, stream::TTSResponse};
 
 const BASE_API_URL: &str = "https://deprecatedapis.tts.quest/v2/";
 
@@ -72,6 +74,36 @@ impl VOICEVOX {
             Ok(response) => {
                 let body = response.bytes().await?;
                 Ok(body.to_vec())
+            }
+            Err(err) => Err(Box::new(err)),
+        }
+    }
+
+    #[tracing::instrument]
+    pub async fn synthesize_stream(
+        &self,
+        text: String,
+        speaker: i64,
+    ) -> Result<Mp3Request, Box<dyn std::error::Error>> {
+        let client = reqwest::Client::new();
+        match client
+            .post("https://api.tts.quest/v3/voicevox/synthesis")
+            .query(&[
+                ("speaker", speaker.to_string()),
+                ("text", text),
+                ("key", self.key.clone()),
+            ])
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let body = response.text().await.unwrap();
+                let response: TTSResponse = serde_json::from_str(&body).unwrap();
+
+                Ok(Mp3Request::new(
+                    reqwest::Client::new(),
+                    response.mp3_streaming_url,
+                ))
             }
             Err(err) => Err(Box::new(err)),
         }
