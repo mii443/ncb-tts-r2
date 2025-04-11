@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use regex::Regex;
 use serenity::{model::prelude::Message, prelude::Context};
-use songbird::input::cached::Compressed;
+use songbird::tracks::Track;
 
 use crate::{
     data::{DatabaseClientData, TTSClientData},
@@ -88,7 +88,7 @@ impl TTSMessage for Message {
         res
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Compressed> {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
@@ -110,8 +110,8 @@ impl TTSMessage for Message {
             .get::<TTSClientData>()
             .expect("Cannot get GCP TTSClientStorage");
 
-        let audio = match config.tts_type.unwrap_or(TTSType::GCP) {
-            TTSType::GCP => tts
+        match config.tts_type.unwrap_or(TTSType::GCP) {
+            TTSType::GCP => vec![tts
                 .synthesize_gcp(SynthesizeRequest {
                     input: SynthesisInput {
                         text: None,
@@ -125,17 +125,17 @@ impl TTSMessage for Message {
                     },
                 })
                 .await
-                .unwrap(),
+                .unwrap()
+                .into()],
 
-            TTSType::VOICEVOX => tts
+            TTSType::VOICEVOX => vec![tts
                 .synthesize_voicevox(
                     &text.replace("<break time=\"200ms\"/>", "、"),
                     config.voicevox_speaker.unwrap_or(1),
                 )
                 .await
-                .unwrap(),
-        };
-
-        vec![audio]
+                .unwrap()
+                .into()],
+        }
     }
 }
