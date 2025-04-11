@@ -3,7 +3,7 @@ use opentelemetry::{
     trace::{SamplingDecision, SamplingResult, TraceContextExt, TraceState, TracerProvider as _},
     KeyValue,
 };
-use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::{Protocol, WithExportConfig};
 use opentelemetry_sdk::{
     metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
     trace::{RandomIdGenerator, SdkTracerProvider, ShouldSample},
@@ -51,6 +51,7 @@ fn init_meter_provider(url: &str) -> SdkMeterProvider {
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_http()
         .with_endpoint(url)
+        .with_protocol(Protocol::HttpBinary)
         .with_temporality(opentelemetry_sdk::metrics::Temporality::default())
         .build()
         .unwrap();
@@ -77,6 +78,7 @@ fn init_tracer_provider(url: &str) -> SdkTracerProvider {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
         .with_endpoint(url)
+        .with_protocol(Protocol::HttpBinary)
         .build()
         .unwrap();
 

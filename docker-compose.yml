@@ -3,7 +3,7 @@ version: '3'
 services:
     ncb-tts-r2:
         container_name: ncb-tts-r2
-        image: ghcr.io/mii443/ncb-tts-r2:1.9.0
+        image: ghcr.io/mii443/ncb-tts-r2:1.9.1
         environment:
         - NCB_TOKEN=YOUR_BOT_TOKEN
         - NCB_APP_ID=YOUR_BOT_ID
