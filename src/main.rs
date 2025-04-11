@@ -20,7 +20,6 @@ use serenity::{
     all::{standard::Configuration, ApplicationId},
     client::Client,
     framework::StandardFramework,
-    futures::lock::Mutex,
     prelude::{GatewayIntents, RwLock},
 };
 use trace::init_tracing_subscriber;
@@ -104,7 +103,7 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
         data.insert::<TTSClientData>(Arc::new(TTS::new(voicevox, tts)));
-        data.insert::<DatabaseClientData>(Arc::new(Mutex::new(database_client)));
+        data.insert::<DatabaseClientData>(Arc::new(database_client));
     }
 
     info!("Bot initialized.");

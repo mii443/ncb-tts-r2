@@ -27,7 +27,6 @@ impl TTSMessage for Message {
                 .get::<DatabaseClientData>()
                 .expect("Cannot get DatabaseClientData")
                 .clone();
-            let mut database = database.lock().await;
             database
                 .get_server_config_or_default(instance.guild.get())
                 .await
@@ -98,7 +97,6 @@ impl TTSMessage for Message {
                 .get::<DatabaseClientData>()
                 .expect("Cannot get DatabaseClientData")
                 .clone();
-            let mut database = database.lock().await;
             database
                 .get_user_config_or_default(self.author.id.get())
                 .await

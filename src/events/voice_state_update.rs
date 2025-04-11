@@ -6,7 +6,11 @@ use crate::{
     },
     tts::{instance::TTSInstance, message::AnnounceMessage},
 };
-use serenity::{all::{CreateEmbed, CreateMessage, EditThread}, model::voice::VoiceState, prelude::Context};
+use serenity::{
+    all::{CreateEmbed, CreateMessage, EditThread},
+    model::voice::VoiceState,
+    prelude::Context,
+};
 
 pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: VoiceState) {
     if new.member.clone().unwrap().user.bot {
@@ -37,7 +41,6 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             .get::<DatabaseClientData>()
             .expect("Cannot get DatabaseClientData")
             .clone();
-        let mut database = database.lock().await;
         database
             .get_server_config_or_default(guild_id.get())
             .await
@@ -65,24 +68,26 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     );
 
                     let _handler = manager.join(guild_id, new_channel).await;
-                    let data = ctx
-                        .data
-                        .read()
-                        .await;
+                    let data = ctx.data.read().await;
                     let tts_client = data
                         .get::<TTSClientData>()
                         .expect("Cannot get TTSClientData");
                     let voicevox_speakers = tts_client.voicevox_client.get_speakers().await;
 
                     new_channel
-                        .send_message(&ctx.http, 
-                    CreateMessage::new()
-                                .embed(
-                                    CreateEmbed::new()
-                                        .title("自動参加 読み上げ（Serenity）")
-                                        .field("VOICEVOXクレジット", format!("```\n{}\n```", voicevox_speakers.join("\n")), false)
-                                        .field("設定コマンド", "`/config`", false)
-                                        .field("フィードバック", "https://feedback.mii.codes/", false))
+                        .send_message(
+                            &ctx.http,
+                            CreateMessage::new().embed(
+                                CreateEmbed::new()
+                                    .title("自動参加 読み上げ（Serenity）")
+                                    .field(
+                                        "VOICEVOXクレジット",
+                                        format!("```\n{}\n```", voicevox_speakers.join("\n")),
+                                        false,
+                                    )
+                                    .field("設定コマンド", "`/config`", false)
+                                    .field("フィードバック", "https://feedback.mii.codes/", false),
+                            ),
                         )
                         .await
                         .unwrap();

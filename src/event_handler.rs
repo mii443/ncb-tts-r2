@@ -87,7 +87,7 @@ impl EventHandler for Handler {
                     .get::<DatabaseClientData>()
                     .expect("Cannot get DatabaseClientData")
                     .clone();
-                let mut database = database.lock().await;
+
                 database
                     .get_server_config_or_default(modal.guild_id.unwrap().get())
                     .await
@@ -101,7 +101,7 @@ impl EventHandler for Handler {
                     .get::<DatabaseClientData>()
                     .expect("Cannot get DatabaseClientData")
                     .clone();
-                let mut database = database.lock().await;
+
                 database
                     .set_server_config(modal.guild_id.unwrap().get(), config)
                     .await
@@ -140,7 +140,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .get_server_config_or_default(message_component.guild_id.unwrap().get())
                             .await
@@ -154,7 +154,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .set_server_config(message_component.guild_id.unwrap().get(), config)
                             .await
@@ -180,7 +180,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .get_server_config_or_default(message_component.guild_id.unwrap().get())
                             .await
@@ -233,7 +233,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .get_server_config_or_default(message_component.guild_id.unwrap().get())
                             .await
@@ -326,7 +326,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         let mut config = database
                             .get_server_config_or_default(message_component.guild_id.unwrap().get())
                             .await
@@ -357,7 +357,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .get_server_config_or_default(message_component.guild_id.unwrap().get())
                             .await
@@ -460,7 +460,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .get_user_config_or_default(message_component.user.id.get())
                             .await
@@ -499,7 +499,7 @@ impl EventHandler for Handler {
                             .get::<DatabaseClientData>()
                             .expect("Cannot get DatabaseClientData")
                             .clone();
-                        let mut database = database.lock().await;
+
                         database
                             .set_user_config(message_component.user.id.get(), config.clone())
                             .await

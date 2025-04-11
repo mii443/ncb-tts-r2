@@ -24,7 +24,6 @@ pub async fn config_command(
             .get::<DatabaseClientData>()
             .expect("Cannot get DatabaseClientData")
             .clone();
-        let mut database = database.lock().await;
         database
             .get_user_config_or_default(command.user.id.get())
             .await
