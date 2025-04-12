@@ -120,7 +120,10 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             let mut del_flag = false;
             for channel in guild_id.channels(&ctx.http).await.unwrap() {
                 if channel.0 == instance.voice_channel {
-                    del_flag = channel.1.members(&ctx.cache).unwrap().len() <= 1;
+                    let members = channel.1.members(&ctx.cache).unwrap();
+                    let user_count = members.iter().filter(|member| !member.user.bot).count();
+
+                    del_flag = user_count <= 1;
                 }
             }
 
