@@ -57,23 +57,44 @@ impl TTS {
         }
 
         info!("Cache miss for VOICEVOX TTS");
-        let audio = self
-            .voicevox_client
-            .synthesize_stream(text.to_string(), speaker)
-            .await?;
 
-        tokio::spawn({
-            let cache = self.cache.clone();
-            let audio = audio.clone();
-            async move {
-                info!("Compressing stream audio");
-                let compressed = Compressed::new(audio.into(), Bitrate::Auto).await.unwrap();
-                let mut cache_guard = cache.write().unwrap();
-                cache_guard.put(cache_key, compressed.clone());
-            }
-        });
+        if self.voicevox_client.original_api_url.is_some() {
+            let audio = self
+                .voicevox_client
+                .synthesize_original(text.to_string(), speaker)
+                .await?;
 
-        Ok(audio.into())
+            tokio::spawn({
+                let cache = self.cache.clone();
+                let audio = audio.clone();
+                async move {
+                    info!("Compressing stream audio");
+                    let compressed = Compressed::new(audio.into(), Bitrate::Auto).await.unwrap();
+                    let mut cache_guard = cache.write().unwrap();
+                    cache_guard.put(cache_key, compressed.clone());
+                }
+            });
+
+            Ok(audio.into())
+        } else {
+            let audio = self
+                .voicevox_client
+                .synthesize_stream(text.to_string(), speaker)
+                .await?;
+
+            tokio::spawn({
+                let cache = self.cache.clone();
+                let audio = audio.clone();
+                async move {
+                    info!("Compressing stream audio");
+                    let compressed = Compressed::new(audio.into(), Bitrate::Auto).await.unwrap();
+                    let mut cache_guard = cache.write().unwrap();
+                    cache_guard.put(cache_key, compressed.clone());
+                }
+            });
+
+            Ok(audio.into())
+        }
     }
 
     #[tracing::instrument]

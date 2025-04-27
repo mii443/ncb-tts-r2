@@ -28,6 +28,7 @@ symphonia-core = "0.5.4"
 tokio-util = { version = "0.7.14", features = ["compat"] }
 futures = "0.3.31"
 bytes = "1.10.1"
+voicevox-client = { git = "https://github.com/mii443/rust" }
 
 [dependencies.uuid]
 version = "0.8"
@@ -43,7 +44,19 @@ features = ["mp3"]
 
 [dependencies.serenity]
 version = "0.12"
-features = ["builder", "cache", "client", "gateway", "model", "utils", "unstable_discord_api", "collector", "rustls_backend", "framework", "voice"]
+features = [
+    "builder",
+    "cache",
+    "client",
+    "gateway",
+    "model",
+    "utils",
+    "unstable_discord_api",
+    "collector",
+    "rustls_backend",
+    "framework",
+    "voice",
+]
 
 
 [dependencies.tokio]

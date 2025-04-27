@@ -61,7 +61,14 @@ async fn main() {
             let application_id = env::var("NCB_APP_ID").unwrap();
             let prefix = env::var("NCB_PREFIX").unwrap();
             let redis_url = env::var("NCB_REDIS_URL").unwrap();
-            let voicevox_key = env::var("NCB_VOICEVOX_KEY").unwrap();
+            let voicevox_key = match env::var("NCB_VOICEVOX_KEY") {
+                Ok(key) => Some(key),
+                Err(_) => None,
+            };
+            let voicevox_original_api_url = match env::var("NCB_VOICEVOX_ORIGINAL_API_URL") {
+                Ok(url) => Some(url),
+                Err(_) => None,
+            };
             let otel_http_url = match env::var("NCB_OTEL_HTTP_URL") {
                 Ok(url) => Some(url),
                 Err(_) => None,
@@ -73,6 +80,7 @@ async fn main() {
                 prefix,
                 redis_url,
                 voicevox_key,
+                voicevox_original_api_url,
                 otel_http_url,
             }
         }
@@ -91,7 +99,7 @@ async fn main() {
         Err(err) => panic!("GCP init error: {}", err),
     };
 
-    let voicevox = VOICEVOX::new(config.voicevox_key);
+    let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url);
 
     let database_client = {
         let redis_client = redis::Client::open(config.redis_url).unwrap();
