@@ -1,11 +1,11 @@
-use std::{env, fs::File, io::Write};
-
 use async_trait::async_trait;
 use regex::Regex;
 use serenity::{model::prelude::Message, prelude::Context};
+use songbird::tracks::Track;
 
 use crate::{
     data::{DatabaseClientData, TTSClientData},
+    implement::member_name::ReadName,
     tts::{
         gcp_tts::structs::{
             audio_config::AudioConfig, synthesis_input::SynthesisInput,
@@ -27,9 +27,8 @@ impl TTSMessage for Message {
                 .get::<DatabaseClientData>()
                 .expect("Cannot get DatabaseClientData")
                 .clone();
-            let mut database = database.lock().await;
             database
-                .get_server_config_or_default(instance.guild.0)
+                .get_server_config_or_default(instance.guild.get())
                 .await
                 .unwrap()
                 .unwrap()
@@ -48,19 +47,29 @@ impl TTSMessage for Message {
                 text.clone()
             } else {
                 let member = self.member.clone();
-                let name = if let Some(member) = member {
-                    member.nick.unwrap_or(self.author.name.clone())
+                let name = if let Some(_) = member {
+                    let guild = ctx.cache.guild(self.guild_id.unwrap()).unwrap().clone();
+                    guild
+                        .member(&ctx.http, self.author.id)
+                        .await
+                        .unwrap()
+                        .read_name()
                 } else {
-                    self.author.name.clone()
+                    self.author.read_name()
                 };
                 format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
             }
         } else {
             let member = self.member.clone();
-            let name = if let Some(member) = member {
-                member.nick.unwrap_or(self.author.name.clone())
+            let name = if let Some(_) = member {
+                let guild = ctx.cache.guild(self.guild_id.unwrap()).unwrap().clone();
+                guild
+                    .member(&ctx.http, self.author.id)
+                    .await
+                    .unwrap()
+                    .read_name()
             } else {
-                self.author.name.clone()
+                self.author.read_name()
             };
             format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
         };
@@ -78,33 +87,30 @@ impl TTSMessage for Message {
         res
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
         let text = self.parse(instance, ctx).await;
 
         let data_read = ctx.data.read().await;
-        let storage = data_read
-            .get::<TTSClientData>()
-            .expect("Cannot get GCP TTSClientStorage")
-            .clone();
-        let mut tts = storage.lock().await;
 
         let config = {
             let database = data_read
                 .get::<DatabaseClientData>()
                 .expect("Cannot get DatabaseClientData")
                 .clone();
-            let mut database = database.lock().await;
             database
-                .get_user_config_or_default(self.author.id.0)
+                .get_user_config_or_default(self.author.id.get())
                 .await
                 .unwrap()
                 .unwrap()
         };
 
-        let audio = match config.tts_type.unwrap_or(TTSType::GCP) {
-            TTSType::GCP => tts
-                .0
-                .synthesize(SynthesizeRequest {
+        let tts = data_read
+            .get::<TTSClientData>()
+            .expect("Cannot get GCP TTSClientStorage");
+
+        match config.tts_type.unwrap_or(TTSType::GCP) {
+            TTSType::GCP => vec![tts
+                .synthesize_gcp(SynthesizeRequest {
                     input: SynthesisInput {
                         text: None,
                         ssml: Some(format!("<speak>{}</speak>", text)),
@@ -117,26 +123,17 @@ impl TTSMessage for Message {
                     },
                 })
                 .await
-                .unwrap(),
+                .unwrap()
+                .into()],
 
-            TTSType::VOICEVOX => tts
-                .1
-                .synthesize(
-                    text.replace("<break time=\"200ms\"/>", "、"),
+            TTSType::VOICEVOX => vec![tts
+                .synthesize_voicevox(
+                    &text.replace("<break time=\"200ms\"/>", "、"),
                     config.voicevox_speaker.unwrap_or(1),
                 )
                 .await
-                .unwrap(),
-        };
-
-        let uuid = uuid::Uuid::new_v4().to_string();
-
-        let path = env::current_dir().unwrap();
-        let file_path = path.join("audio").join(format!("{}.mp3", uuid));
-
-        let mut file = File::create(file_path.clone()).unwrap();
-        file.write(&audio).unwrap();
-
-        file_path.into_os_string().into_string().unwrap()
+                .unwrap()
+                .into()],
+        }
     }
 }

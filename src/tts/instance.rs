@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use serenity::{
     model::{
         channel::Message,
@@ -8,6 +10,7 @@ use serenity::{
 
 use crate::tts::message::TTSMessage;
 
+#[derive(Debug, Clone)]
 pub struct TTSInstance {
     pub before_message: Option<Message>,
     pub text_channel: ChannelId,
@@ -22,23 +25,24 @@ impl TTSInstance {
     /// ```rust
     /// instance.read(message, &ctx).await;
     /// ```
+    #[tracing::instrument]
     pub async fn read<T>(&mut self, message: T, ctx: &Context)
     where
-        T: TTSMessage,
+        T: TTSMessage + Debug,
     {
-        let path = message.synthesize(self, ctx).await;
+        let audio = message.synthesize(self, ctx).await;
 
         {
             let manager = songbird::get(&ctx).await.unwrap();
             let call = manager.get(self.guild).unwrap();
             let mut call = call.lock().await;
-            let input = songbird::input::ffmpeg(path)
-                .await
-                .expect("File not found.");
-            call.enqueue_source(input);
+            for audio in audio {
+                call.enqueue(audio.into()).await;
+            }
         }
     }
 
+    #[tracing::instrument]
     pub async fn skip(&mut self, ctx: &Context) {
         let manager = songbird::get(&ctx).await.unwrap();
         let call = manager.get(self.guild).unwrap();

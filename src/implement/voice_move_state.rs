@@ -29,12 +29,10 @@ impl VoiceMoveStateTrait for VoiceState {
             (Some(old_channel_id), Some(new_channel_id)) => {
                 if old_channel_id == new_channel_id {
                     VoiceMoveState::NONE
-                } else if old_channel_id != new_channel_id {
-                    if target_channel == new_channel_id {
-                        VoiceMoveState::JOIN
-                    } else {
-                        VoiceMoveState::NONE
-                    }
+                } else if old_channel_id == target_channel {
+                    VoiceMoveState::LEAVE
+                } else if new_channel_id == target_channel {
+                    VoiceMoveState::JOIN
                 } else {
                     VoiceMoveState::NONE
                 }

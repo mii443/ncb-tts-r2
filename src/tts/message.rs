@@ -1,7 +1,6 @@
-use std::{env, fs::File, io::Write};
-
 use async_trait::async_trait;
 use serenity::prelude::Context;
+use songbird::tracks::Track;
 
 use crate::{data::TTSClientData, tts::instance::TTSInstance};
 
@@ -21,15 +20,16 @@ pub trait TTSMessage {
     /// ```
     async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String;
 
-    /// Synthesize the message and returns the path to the audio file.
+    /// Synthesize the message and returns the audio data.
     ///
     /// Example:
     /// ```rust
-    /// let path = message.synthesize(instance, ctx).await;
+    /// let audio = message.synthesize(instance, ctx).await;
     /// ```
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String;
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track>;
 }
 
+#[derive(Debug, Clone)]
 pub struct AnnounceMessage {
     pub message: String,
 }
@@ -44,18 +44,15 @@ impl TTSMessage for AnnounceMessage {
         )
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
         let text = self.parse(instance, ctx).await;
         let data_read = ctx.data.read().await;
-        let storage = data_read
+        let tts = data_read
             .get::<TTSClientData>()
-            .expect("Cannot get TTSClientStorage")
-            .clone();
-        let mut storage = storage.lock().await;
+            .expect("Cannot get TTSClientStorage");
 
-        let audio = storage
-            .0
-            .synthesize(SynthesizeRequest {
+        let audio = tts
+            .synthesize_gcp(SynthesizeRequest {
                 input: SynthesisInput {
                     text: None,
                     ssml: Some(text),
@@ -74,14 +71,6 @@ impl TTSMessage for AnnounceMessage {
             .await
             .unwrap();
 
-        let uuid = uuid::Uuid::new_v4().to_string();
-
-        let path = env::current_dir().unwrap();
-        let file_path = path.join("audio").join(format!("{}.mp3", uuid));
-
-        let mut file = File::create(file_path.clone()).unwrap();
-        file.write(&audio).unwrap();
-
-        file_path.into_os_string().into_string().unwrap()
+        vec![audio.into()]
     }
 }

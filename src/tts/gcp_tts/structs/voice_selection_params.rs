@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 ///     ssmlGender: String::from("neutral")
 /// }
 /// ```
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 #[allow(non_snake_case)]
 pub struct VoiceSelectionParams {
     pub languageCode: String,

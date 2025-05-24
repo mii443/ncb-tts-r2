@@ -1,9 +1,5 @@
-use crate::{
-    database::database::Database,
-    tts::{gcp_tts::gcp_tts::TTS, voicevox::voicevox::VOICEVOX},
-};
+use crate::{database::database::Database, tts::tts::TTS};
 use serenity::{
-    futures::lock::Mutex,
     model::id::GuildId,
     prelude::{RwLock, TypeMapKey},
 };
@@ -22,12 +18,12 @@ impl TypeMapKey for TTSData {
 pub struct TTSClientData;
 
 impl TypeMapKey for TTSClientData {
-    type Value = Arc<Mutex<(TTS, VOICEVOX)>>;
+    type Value = Arc<TTS>;
 }
 
 /// Database client data
 pub struct DatabaseClientData;
 
 impl TypeMapKey for DatabaseClientData {
-    type Value = Arc<Mutex<Database>>;
+    type Value = Arc<Database>;
 }

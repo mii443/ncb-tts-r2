@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.72 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.82 AS chef
 WORKDIR app
 
 FROM chef AS planner
@@ -14,6 +14,6 @@ RUN cargo build --release
 
 FROM ubuntu:22.04 AS runtime
 WORKDIR /ncb-tts-r2
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg libssl-dev libopus-dev && apt-get -y clean && mkdir audio
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg libssl-dev libopus-dev && apt-get -y clean
 COPY --from=builder /app/target/release/ncb-tts-r2 /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/ncb-tts-r2"]
