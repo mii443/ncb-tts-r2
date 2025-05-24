@@ -10,4 +10,6 @@ pub struct DictionaryOnlyServerConfig {
 pub struct ServerConfig {
     pub dictionary: Dictionary,
     pub autostart_channel_id: Option<u64>,
+    pub voice_state_announce: Option<bool>,
+    pub read_username: Option<bool>,
 }

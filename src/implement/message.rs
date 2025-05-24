@@ -57,7 +57,11 @@ impl TTSMessage for Message {
                 } else {
                     self.author.read_name()
                 };
-                format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
+                if config.read_username.unwrap_or(true) {
+                    format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
+                } else {
+                    format!("{}", text)
+                }
             }
         } else {
             let member = self.member.clone();
@@ -71,7 +75,12 @@ impl TTSMessage for Message {
             } else {
                 self.author.read_name()
             };
-            format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
+
+            if config.read_username.unwrap_or(true) {
+                format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
+            } else {
+                format!("{}", text)
+            }
         };
 
         if self.attachments.len() > 0 {
