@@ -48,10 +48,6 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             .unwrap()
     };
 
-    if !config.voice_state_announce.unwrap_or(true) {
-        return;
-    }
-
     {
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild_id) {
