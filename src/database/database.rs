@@ -98,6 +98,8 @@ impl Database {
         let config = ServerConfig {
             dictionary: Dictionary::new(),
             autostart_channel_id: None,
+            voice_state_announce: Some(true),
+            read_username: Some(true),
         };
 
         self.set_server_config(server_id, config).await
