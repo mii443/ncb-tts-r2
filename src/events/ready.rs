@@ -55,6 +55,57 @@ async fn restore_tts_instances(ctx: &Context) {
             let mut failed_count = 0;
 
             for (guild_id, instance) in instances {
+                // Check if there are users in the voice channel before reconnecting
+                let should_reconnect = match guild_id.channels(&ctx.http).await {
+                    Ok(channels) => {
+                        if let Some(channel) = channels.get(&instance.voice_channel) {
+                            match channel.members(&ctx.cache) {
+                                Ok(members) => {
+                                    let user_count =
+                                        members.iter().filter(|member| !member.user.bot).count();
+                                    user_count > 0
+                                }
+                                Err(_) => {
+                                    // If we can't get members, assume there are no users
+                                    tracing::warn!(
+                                        "Failed to get members for voice channel {} in guild {}",
+                                        instance.voice_channel,
+                                        guild_id
+                                    );
+                                    false
+                                }
+                            }
+                        } else {
+                            // Channel doesn't exist anymore
+                            tracing::warn!(
+                                "Voice channel {} no longer exists in guild {}",
+                                instance.voice_channel,
+                                guild_id
+                            );
+                            false
+                        }
+                    }
+                    Err(_) => {
+                        // If we can't get channels, assume reconnection should not happen
+                        tracing::warn!("Failed to get channels for guild {}", guild_id);
+                        false
+                    }
+                };
+
+                if !should_reconnect {
+                    // Remove instance from database as the channel is empty or doesn't exist
+                    failed_count += 1;
+                    tracing::info!("Skipping reconnection for guild {} - no users in voice channel or channel doesn't exist", guild_id);
+
+                    if let Err(db_err) = database.remove_tts_instance(guild_id).await {
+                        tracing::error!(
+                            "Failed to remove empty TTS instance from database: {}",
+                            db_err
+                        );
+                    }
+                    continue;
+                }
+
                 // Try to reconnect to voice channel
                 match instance.reconnect(ctx).await {
                     Ok(_) => {

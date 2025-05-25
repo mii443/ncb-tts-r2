@@ -55,6 +55,41 @@ impl TTSInstance {
                     self.voice_channel,
                     self.guild
                 );
+
+                // Double-check if there are users in the voice channel after connection
+                match self.guild.channels(&ctx.http).await {
+                    Ok(channels) => {
+                        if let Some(channel) = channels.get(&self.voice_channel) {
+                            match channel.members(&ctx.cache) {
+                                Ok(members) => {
+                                    let user_count =
+                                        members.iter().filter(|member| !member.user.bot).count();
+                                    if user_count == 0 {
+                                        tracing::info!("No users found in voice channel after reconnection, disconnecting from guild {}", self.guild);
+                                        // Disconnect if no users are present
+                                        let _ = manager.remove(self.guild).await;
+                                        return Err(
+                                            "No users in voice channel after reconnection".into()
+                                        );
+                                    }
+                                }
+                                Err(_) => {
+                                    tracing::warn!(
+                                        "Failed to verify members after reconnection for guild {}",
+                                        self.guild
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            "Failed to get channels after reconnection for guild {}",
+                            self.guild
+                        );
+                    }
+                }
+
                 Ok(())
             }
             Err(e) => {
