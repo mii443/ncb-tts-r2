@@ -122,6 +122,93 @@ impl EventHandler for Handler {
         }
         if let Some(message_component) = interaction.message_component() {
             match &*message_component.data.custom_id {
+                "TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE" => {
+                    let data_read = ctx.data.read().await;
+                    let mut config = {
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+
+                        database
+                            .get_server_config_or_default(message_component.guild_id.unwrap().get())
+                            .await
+                            .unwrap()
+                            .unwrap()
+                    };
+
+                    config.voice_state_announce =
+                        Some(!config.voice_state_announce.unwrap_or(true));
+                    let state = config.voice_state_announce.unwrap_or(true);
+
+                    {
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+
+                        database
+                            .set_server_config(message_component.guild_id.unwrap().get(), config)
+                            .await
+                            .unwrap();
+                    }
+
+                    message_component
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new().content(format!(
+                                    "入退出アナウンス通知を{}へ切り替えました。",
+                                    if state { "`有効`" } else { "`無効`" }
+                                )),
+                            ),
+                        )
+                        .await
+                        .unwrap();
+                }
+                "TTS_CONFIG_SERVER_SET_READ_USERNAME" => {
+                    let data_read = ctx.data.read().await;
+                    let mut config = {
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+
+                        database
+                            .get_server_config_or_default(message_component.guild_id.unwrap().get())
+                            .await
+                            .unwrap()
+                            .unwrap()
+                    };
+
+                    config.read_username = Some(!config.read_username.unwrap_or(true));
+                    let state = config.read_username.unwrap_or(true);
+
+                    {
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+
+                        database
+                            .set_server_config(message_component.guild_id.unwrap().get(), config)
+                            .await
+                            .unwrap();
+                    }
+
+                    message_component
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new().content(format!(
+                                    "ユーザー名読み上げを{}へ切り替えました。",
+                                    if state { "`有効`" } else { "`無効`" }
+                                )),
+                            ),
+                        )
+                        .await
+                        .unwrap();
+                }
                 "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU" => {
                     let i = usize::from_str_radix(
                         &match message_component.data.kind {
@@ -399,14 +486,51 @@ impl EventHandler for Handler {
                             CreateInteractionResponse::UpdateMessage(
                                 CreateInteractionResponseMessage::new()
                                     .content("自動参加チャンネル設定")
-                                    .components(vec![CreateActionRow::SelectMenu(
-                                        CreateSelectMenu::new(
-                                            "SET_AUTOSTART_CHANNEL",
-                                            CreateSelectMenuKind::String { options },
+                                    .components(vec![
+                                        CreateActionRow::SelectMenu(
+                                            CreateSelectMenu::new(
+                                                "SET_AUTOSTART_CHANNEL",
+                                                CreateSelectMenuKind::String { options },
+                                            )
+                                            .min_values(0)
+                                            .max_values(1),
+                                        ),
+                                        CreateActionRow::Buttons(vec![CreateButton::new(
+                                            "TTS_CONFIG_SERVER_BACK",
                                         )
-                                        .min_values(0)
-                                        .max_values(1),
-                                    )]),
+                                        .label("← サーバー設定に戻る")
+                                        .style(ButtonStyle::Secondary)]),
+                                    ]),
+                            ),
+                        )
+                        .await
+                        .unwrap();
+                }
+                "TTS_CONFIG_SERVER_BACK" => {
+                    message_component
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new()
+                                    .content("サーバー設定")
+                                    .components(vec![CreateActionRow::Buttons(vec![
+                                        CreateButton::new("TTS_CONFIG_SERVER_DICTIONARY")
+                                            .label("辞書管理")
+                                            .style(ButtonStyle::Primary),
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL",
+                                        )
+                                        .label("自動参加チャンネル")
+                                        .style(ButtonStyle::Primary),
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE",
+                                        )
+                                        .label("入退出アナウンス通知切り替え")
+                                        .style(ButtonStyle::Primary),
+                                        CreateButton::new("TTS_CONFIG_SERVER_SET_READ_USERNAME")
+                                            .label("ユーザー名読み上げ切り替え")
+                                            .style(ButtonStyle::Primary),
+                                    ])]),
                             ),
                         )
                         .await
@@ -420,27 +544,59 @@ impl EventHandler for Handler {
                                 CreateInteractionResponseMessage::new()
                                     .content("サーバー設定")
                                     .components(vec![CreateActionRow::Buttons(vec![
-                                        CreateButton::new(
-                                            "TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON",
-                                        )
-                                        .label("辞書を追加")
-                                        .style(ButtonStyle::Primary),
-                                        CreateButton::new(
-                                            "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON",
-                                        )
-                                        .label("辞書を削除")
-                                        .style(ButtonStyle::Danger),
-                                        CreateButton::new(
-                                            "TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON",
-                                        )
-                                        .label("辞書一覧")
-                                        .style(ButtonStyle::Primary),
+                                        CreateButton::new("TTS_CONFIG_SERVER_DICTIONARY")
+                                            .label("辞書管理")
+                                            .style(ButtonStyle::Primary),
                                         CreateButton::new(
                                             "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL",
                                         )
                                         .label("自動参加チャンネル")
                                         .style(ButtonStyle::Primary),
+                                        CreateButton::new(
+                                            "TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE",
+                                        )
+                                        .label("入退出アナウンス通知切り替え")
+                                        .style(ButtonStyle::Primary),
+                                        CreateButton::new("TTS_CONFIG_SERVER_SET_READ_USERNAME")
+                                            .label("ユーザー名読み上げ切り替え")
+                                            .style(ButtonStyle::Primary),
                                     ])]),
+                            ),
+                        )
+                        .await
+                        .unwrap();
+                }
+                "TTS_CONFIG_SERVER_DICTIONARY" => {
+                    message_component
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new()
+                                    .content("辞書管理")
+                                    .components(vec![
+                                        CreateActionRow::Buttons(vec![
+                                            CreateButton::new(
+                                                "TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON",
+                                            )
+                                            .label("辞書を追加")
+                                            .style(ButtonStyle::Primary),
+                                            CreateButton::new(
+                                                "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON",
+                                            )
+                                            .label("辞書を削除")
+                                            .style(ButtonStyle::Danger),
+                                            CreateButton::new(
+                                                "TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON",
+                                            )
+                                            .label("辞書一覧")
+                                            .style(ButtonStyle::Primary),
+                                        ]),
+                                        CreateActionRow::Buttons(vec![CreateButton::new(
+                                            "TTS_CONFIG_SERVER_BACK",
+                                        )
+                                        .label("← サーバー設定に戻る")
+                                        .style(ButtonStyle::Secondary)]),
+                                    ]),
                             ),
                         )
                         .await
