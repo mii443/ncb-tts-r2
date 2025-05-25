@@ -111,7 +111,7 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
         data.insert::<TTSClientData>(Arc::new(TTS::new(voicevox, tts)));
-        data.insert::<DatabaseClientData>(Arc::new(database_client));
+        data.insert::<DatabaseClientData>(Arc::new(database_client.clone()));
     }
 
     info!("Bot initialized.");

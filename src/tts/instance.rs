@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
 use serenity::{
     model::{
         channel::Message,
@@ -10,8 +11,9 @@ use serenity::{
 
 use crate::tts::message::TTSMessage;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TTSInstance {
+    #[serde(skip)] // Messageは複雑すぎるのでシリアライズしない
     pub before_message: Option<Message>,
     pub text_channel: ChannelId,
     pub voice_channel: ChannelId,
@@ -19,6 +21,49 @@ pub struct TTSInstance {
 }
 
 impl TTSInstance {
+    /// Create a new TTSInstance
+    pub fn new(text_channel: ChannelId, voice_channel: ChannelId, guild: GuildId) -> Self {
+        Self {
+            before_message: None,
+            text_channel,
+            voice_channel,
+            guild,
+        }
+    }
+
+    /// Reconnect to the voice channel after bot restart
+    #[tracing::instrument]
+    pub async fn reconnect(
+        &self,
+        ctx: &Context,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let manager = songbird::get(&ctx)
+            .await
+            .ok_or("Songbird manager not available")?;
+
+        // Check if we're already connected
+        if manager.get(self.guild).is_some() {
+            tracing::info!("Already connected to guild {}", self.guild);
+            return Ok(());
+        }
+
+        // Try to connect to the voice channel
+        match manager.join(self.guild, self.voice_channel).await {
+            Ok(_) => {
+                tracing::info!(
+                    "Successfully reconnected to voice channel {} in guild {}",
+                    self.voice_channel,
+                    self.guild
+                );
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Failed to reconnect to voice channel: {}", e);
+                Err(Box::new(e))
+            }
+        }
+    }
+
     /// Synthesize text to speech and send it to the voice channel.
     ///
     /// Example:

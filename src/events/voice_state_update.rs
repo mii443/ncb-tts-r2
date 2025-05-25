@@ -61,15 +61,21 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                         .await
                         .expect("Cannot get songbird client.")
                         .clone();
-                    storage.insert(
-                        guild_id,
-                        TTSInstance {
-                            before_message: None,
-                            guild: guild_id,
-                            text_channel: new_channel,
-                            voice_channel: new_channel,
-                        },
-                    );
+
+                    let instance = TTSInstance::new(new_channel, new_channel, guild_id);
+                    storage.insert(guild_id, instance.clone());
+
+                    // Save to database
+                    let data_read = ctx.data.read().await;
+                    let database = data_read
+                        .get::<DatabaseClientData>()
+                        .expect("Cannot get DatabaseClientData")
+                        .clone();
+                    drop(data_read);
+
+                    if let Err(e) = database.save_tts_instance(guild_id, &instance).await {
+                        tracing::error!("Failed to save TTS instance to database: {}", e);
+                    }
 
                     let _handler = manager.join(guild_id, new_channel).await;
                     let data = ctx.data.read().await;
@@ -139,6 +145,18 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     .edit_thread(&ctx.http, EditThread::new().archived(true))
                     .await;
                 storage.remove(&guild_id);
+
+                // Remove from database
+                let data_read = ctx.data.read().await;
+                let database = data_read
+                    .get::<DatabaseClientData>()
+                    .expect("Cannot get DatabaseClientData")
+                    .clone();
+                drop(data_read);
+
+                if let Err(e) = database.remove_tts_instance(guild_id).await {
+                    tracing::error!("Failed to remove TTS instance from database: {}", e);
+                }
 
                 let manager = songbird::get(&ctx)
                     .await

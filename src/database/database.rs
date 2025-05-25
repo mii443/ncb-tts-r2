@@ -1,8 +1,10 @@
 use std::fmt::Debug;
 
 use crate::tts::{
-    gcp_tts::structs::voice_selection_params::VoiceSelectionParams, tts_type::TTSType,
+    gcp_tts::structs::voice_selection_params::VoiceSelectionParams, instance::TTSInstance,
+    tts_type::TTSType,
 };
+use serenity::model::id::GuildId;
 
 use super::{dictionary::Dictionary, server_config::ServerConfig, user_config::UserConfig};
 use redis::Commands;
@@ -23,6 +25,14 @@ impl Database {
 
     fn user_key(user_id: u64) -> String {
         format!("discord_user:{}", user_id)
+    }
+
+    fn tts_instance_key(guild_id: u64) -> String {
+        format!("tts_instance:{}", guild_id)
+    }
+
+    fn tts_instances_list_key() -> String {
+        "tts_instances_list".to_string()
     }
 
     #[tracing::instrument]
@@ -147,6 +157,81 @@ impl Database {
                 self.set_default_user_config(user_id).await?;
                 self.get_user_config(user_id).await
             }
+        }
+    }
+
+    /// Save TTS instance to database
+    #[tracing::instrument]
+    pub async fn save_tts_instance(
+        &self,
+        guild_id: GuildId,
+        instance: &TTSInstance,
+    ) -> redis::RedisResult<()> {
+        let key = Self::tts_instance_key(guild_id.get());
+        let list_key = Self::tts_instances_list_key();
+
+        // Save the instance
+        let result = self.set_config(&key, instance);
+
+        // Add guild_id to the list of active instances
+        if result.is_ok() {
+            match self.client.get_connection() {
+                Ok(mut connection) => {
+                    let _: redis::RedisResult<()> = connection.sadd(&list_key, guild_id.get());
+                }
+                Err(_) => {}
+            }
+        }
+
+        result
+    }
+
+    /// Load TTS instance from database
+    #[tracing::instrument]
+    pub async fn load_tts_instance(
+        &self,
+        guild_id: GuildId,
+    ) -> redis::RedisResult<Option<TTSInstance>> {
+        let key = Self::tts_instance_key(guild_id.get());
+        self.get_config(&key)
+    }
+
+    /// Remove TTS instance from database
+    #[tracing::instrument]
+    pub async fn remove_tts_instance(&self, guild_id: GuildId) -> redis::RedisResult<()> {
+        let key = Self::tts_instance_key(guild_id.get());
+        let list_key = Self::tts_instances_list_key();
+
+        match self.client.get_connection() {
+            Ok(mut connection) => {
+                let _: redis::RedisResult<()> = connection.del(&key);
+                let _: redis::RedisResult<()> = connection.srem(&list_key, guild_id.get());
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Get all active TTS instances
+    #[tracing::instrument]
+    pub async fn get_all_tts_instances(&self) -> redis::RedisResult<Vec<(GuildId, TTSInstance)>> {
+        let list_key = Self::tts_instances_list_key();
+
+        match self.client.get_connection() {
+            Ok(mut connection) => {
+                let guild_ids: Vec<u64> = connection.smembers(&list_key).unwrap_or_default();
+                let mut instances = Vec::new();
+
+                for guild_id in guild_ids {
+                    let guild_id = GuildId::new(guild_id);
+                    if let Ok(Some(instance)) = self.load_tts_instance(guild_id).await {
+                        instances.push((guild_id, instance));
+                    }
+                }
+
+                Ok(instances)
+            }
+            Err(e) => Err(e),
         }
     }
 }

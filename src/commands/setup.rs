@@ -8,7 +8,7 @@ use serenity::{
 use tracing::info;
 
 use crate::{
-    data::{TTSClientData, TTSData},
+    data::{DatabaseClientData, TTSClientData, TTSData},
     tts::instance::TTSInstance,
 };
 
@@ -106,15 +106,20 @@ pub async fn setup_command(
             }
         };
 
-        storage.insert(
-            guild.id,
-            TTSInstance {
-                before_message: None,
-                guild: guild.id,
-                text_channel: text_channel_id,
-                voice_channel: channel_id,
-            },
-        );
+        let instance = TTSInstance::new(text_channel_id, channel_id, guild.id);
+        storage.insert(guild.id, instance.clone());
+
+        // Save to database
+        let data_read = ctx.data.read().await;
+        let database = data_read
+            .get::<DatabaseClientData>()
+            .expect("Cannot get DatabaseClientData")
+            .clone();
+        drop(data_read);
+        
+        if let Err(e) = database.save_tts_instance(guild.id, &instance).await {
+            tracing::error!("Failed to save TTS instance to database: {}", e);
+        }
 
         text_channel_id
     };
