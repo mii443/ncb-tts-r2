@@ -395,6 +395,8 @@ impl EventHandler for Handler {
                         ComponentInteractionDataKind::StringSelect { ref values, .. } => {
                             if values.len() == 0 {
                                 None
+                            } else if values[0] == "SET_AUTOSTART_CHANNEL_CLEAR" {
+                                None
                             } else {
                                 Some(
                                     u64::from_str_radix(
@@ -426,12 +428,18 @@ impl EventHandler for Handler {
                             .unwrap();
                     };
 
+                    let response_content = if autostart_channel_id.is_some() {
+                        "自動参加チャンネルを設定しました。"
+                    } else {
+                        "自動参加チャンネルを解除しました。"
+                    };
+
                     message_component
                         .create_response(
                             &ctx.http,
                             CreateInteractionResponse::UpdateMessage(
                                 CreateInteractionResponseMessage::new()
-                                    .content("自動参加チャンネルを設定しました。"),
+                                    .content(response_content),
                             ),
                         )
                         .await
@@ -462,6 +470,16 @@ impl EventHandler for Handler {
                         .unwrap();
 
                     let mut options = Vec::new();
+                    
+                    // 解除オプションを追加
+                    let clear_option = CreateSelectMenuOption::new(
+                        "解除",
+                        "SET_AUTOSTART_CHANNEL_CLEAR",
+                    )
+                    .description("自動参加チャンネルを解除します")
+                    .default_selection(autostart_channel_id == 0);
+                    options.push(clear_option);
+
                     for (id, channel) in channels {
                         if channel.kind != ChannelType::Voice {
                             continue;
