@@ -5,7 +5,10 @@ use serenity::{
 };
 use tracing::info;
 
-use crate::data::{DatabaseClientData, TTSData};
+use crate::{
+    connection_monitor::ConnectionMonitor,
+    data::{DatabaseClientData, TTSData},
+};
 
 #[tracing::instrument]
 pub async fn ready(ctx: Context, ready: Ready) {
@@ -35,6 +38,9 @@ pub async fn ready(ctx: Context, ready: Ready) {
 
     // Restore TTS instances from database
     restore_tts_instances(&ctx).await;
+
+    // Start connection monitor
+    ConnectionMonitor::start(ctx.clone());
 }
 
 /// Restore TTS instances from database and reconnect to voice channels
@@ -107,7 +113,7 @@ async fn restore_tts_instances(ctx: &Context) {
                 }
 
                 // Try to reconnect to voice channel
-                match instance.reconnect(ctx).await {
+                match instance.reconnect(ctx, true).await {
                     Ok(_) => {
                         // Add to in-memory storage
                         let mut tts_data = tts_data.write().await;

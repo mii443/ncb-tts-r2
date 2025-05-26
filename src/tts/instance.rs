@@ -31,18 +31,40 @@ impl TTSInstance {
         }
     }
 
+    pub async fn check_connection(&self, ctx: &Context) -> bool {
+        let manager = match songbird::get(ctx).await {
+            Some(manager) => manager,
+            None => {
+                tracing::error!("Cannot get songbird manager");
+                return false;
+            }
+        };
+
+        let call = manager.get(self.guild);
+        if let Some(call) = call {
+            if let Some(connection) = call.lock().await.current_connection() {
+                connection.channel_id.is_some()
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
     /// Reconnect to the voice channel after bot restart
     #[tracing::instrument]
     pub async fn reconnect(
         &self,
         ctx: &Context,
+        skip_check: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let manager = songbird::get(&ctx)
             .await
             .ok_or("Songbird manager not available")?;
 
         // Check if we're already connected
-        if manager.get(self.guild).is_some() {
+        if self.check_connection(&ctx).await {
             tracing::info!("Already connected to guild {}", self.guild);
             return Ok(());
         }

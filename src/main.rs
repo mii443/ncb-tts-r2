@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod connection_monitor;
 mod data;
 mod database;
 mod event_handler;
