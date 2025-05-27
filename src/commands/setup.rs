@@ -149,7 +149,11 @@ pub async fn setup_command(
     let tts_client = data
         .get::<TTSClientData>()
         .expect("Cannot get TTSClientData");
-    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await;
+    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to get VOICEVOX speakers: {}", e);
+            vec!["VOICEVOX API unavailable".to_string()]
+        });
 
     text_channel_id
         .send_message(&ctx.http, CreateMessage::new()

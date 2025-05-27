@@ -34,7 +34,11 @@ pub async fn config_command(
     let tts_client = data_read
         .get::<TTSClientData>()
         .expect("Cannot get TTSClientData");
-    let voicevox_speakers = tts_client.voicevox_client.get_styles().await;
+    let voicevox_speakers = tts_client.voicevox_client.get_styles().await
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to get VOICEVOX styles: {}", e);
+            vec![("VOICEVOX API unavailable".to_string(), 1)]
+        });
 
     let voicevox_speaker = config.voicevox_speaker.unwrap_or(1);
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);

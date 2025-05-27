@@ -4,6 +4,7 @@ use crate::{
     },
     data::DatabaseClientData,
     database::dictionary::Rule,
+    errors::{constants::*, validation},
     events,
     tts::tts_type::TTSType,
 };
@@ -49,28 +50,79 @@ impl EventHandler for Handler {
             }
         }
         if let Interaction::Modal(modal) = interaction.clone() {
-            if modal.data.custom_id != "TTS_CONFIG_SERVER_ADD_DICTIONARY" {
+            if modal.data.custom_id != TTS_CONFIG_SERVER_ADD_DICTIONARY {
                 return;
             }
 
             let rows = modal.data.components.clone();
-            let rule_name =
-                if let ActionRowComponent::InputText(text) = rows[0].components[0].clone() {
-                    text.value.unwrap()
-                } else {
-                    panic!("Cannot get rule name");
-                };
-
-            let from = if let ActionRowComponent::InputText(text) = rows[1].components[0].clone() {
-                text.value.unwrap()
-            } else {
-                panic!("Cannot get from");
+            
+            // Extract rule name with proper error handling
+            let rule_name = match rows.get(0)
+                .and_then(|row| row.components.get(0))
+                .and_then(|component| {
+                    if let ActionRowComponent::InputText(text) = component {
+                        text.value.as_ref()
+                    } else {
+                        None
+                    }
+                }) {
+                Some(name) => {
+                    if let Err(e) = validation::validate_rule_name(name) {
+                        tracing::error!("Invalid rule name: {}", e);
+                        return;
+                    }
+                    name.clone()
+                },
+                None => {
+                    tracing::error!("Cannot extract rule name from modal");
+                    return;
+                }
             };
 
-            let to = if let ActionRowComponent::InputText(text) = rows[2].components[0].clone() {
-                text.value.unwrap()
-            } else {
-                panic!("Cannot get to");
+            // Extract 'from' field with validation
+            let from = match rows.get(1)
+                .and_then(|row| row.components.get(0))
+                .and_then(|component| {
+                    if let ActionRowComponent::InputText(text) = component {
+                        text.value.as_ref()
+                    } else {
+                        None
+                    }
+                }) {
+                Some(pattern) => {
+                    if let Err(e) = validation::validate_regex_pattern(pattern) {
+                        tracing::error!("Invalid regex pattern: {}", e);
+                        return;
+                    }
+                    pattern.clone()
+                },
+                None => {
+                    tracing::error!("Cannot extract regex pattern from modal");
+                    return;
+                }
+            };
+
+            // Extract 'to' field with validation
+            let to = match rows.get(2)
+                .and_then(|row| row.components.get(0))
+                .and_then(|component| {
+                    if let ActionRowComponent::InputText(text) = component {
+                        text.value.as_ref()
+                    } else {
+                        None
+                    }
+                }) {
+                Some(replacement) => {
+                    if let Err(e) = validation::validate_replacement_text(replacement) {
+                        tracing::error!("Invalid replacement text: {}", e);
+                        return;
+                    }
+                    replacement.clone()
+                },
+                None => {
+                    tracing::error!("Cannot extract replacement text from modal");
+                    return;
+                }
             };
 
             let rule = Rule {
@@ -83,29 +135,41 @@ impl EventHandler for Handler {
             let data_read = ctx.data.read().await;
 
             let mut config = {
-                let database = data_read
-                    .get::<DatabaseClientData>()
-                    .expect("Cannot get DatabaseClientData")
-                    .clone();
+                let database = match data_read.get::<DatabaseClientData>() {
+                    Some(db) => db.clone(),
+                    None => {
+                        tracing::error!("Cannot get DatabaseClientData");
+                        return;
+                    }
+                };
 
-                database
-                    .get_server_config_or_default(modal.guild_id.unwrap().get())
-                    .await
-                    .unwrap()
-                    .unwrap()
+                match database.get_server_config_or_default(modal.guild_id.unwrap().get()).await {
+                    Ok(Some(config)) => config,
+                    Ok(None) => {
+                        tracing::error!("No server config found");
+                        return;
+                    },
+                    Err(e) => {
+                        tracing::error!("Database error: {}", e);
+                        return;
+                    }
+                }
             };
             config.dictionary.rules.push(rule);
 
             {
-                let database = data_read
-                    .get::<DatabaseClientData>()
-                    .expect("Cannot get DatabaseClientData")
-                    .clone();
+                let database = match data_read.get::<DatabaseClientData>() {
+                    Some(db) => db.clone(),
+                    None => {
+                        tracing::error!("Cannot get DatabaseClientData");
+                        return;
+                    }
+                };
 
-                database
-                    .set_server_config(modal.guild_id.unwrap().get(), config)
-                    .await
-                    .unwrap();
+                if let Err(e) = database.set_server_config(modal.guild_id.unwrap().get(), config).await {
+                    tracing::error!("Failed to save server config: {}", e);
+                    return;
+                }
                 modal
                     .create_response(
                         &ctx.http,
@@ -122,7 +186,7 @@ impl EventHandler for Handler {
         }
         if let Some(message_component) = interaction.message_component() {
             match &*message_component.data.custom_id {
-                "TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE" => {
+                id if id == TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE => {
                     let data_read = ctx.data.read().await;
                     let mut config = {
                         let database = data_read
@@ -166,7 +230,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_SET_READ_USERNAME" => {
+                id if id == TTS_CONFIG_SERVER_SET_READ_USERNAME => {
                     let data_read = ctx.data.read().await;
                     let mut config = {
                         let database = data_read
@@ -209,7 +273,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU" => {
+                id if id == TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU => {
                     let i = usize::from_str_radix(
                         &match message_component.data.kind {
                             ComponentInteractionDataKind::StringSelect { ref values, .. } => {
@@ -259,7 +323,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON" => {
+                id if id == TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON => {
                     let data_read = ctx.data.read().await;
 
                     let config = {
@@ -313,7 +377,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON" => {
+                id if id == TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON => {
                     let config = {
                         let data_read = ctx.data.read().await;
                         let database = data_read
@@ -351,7 +415,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON" => {
+                id if id == TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON => {
                     message_component
                         .create_response(
                             &ctx.http,
@@ -390,7 +454,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "SET_AUTOSTART_CHANNEL" => {
+                id if id == SET_AUTOSTART_CHANNEL => {
                     let autostart_channel_id = match message_component.data.kind {
                         ComponentInteractionDataKind::StringSelect { ref values, .. } => {
                             if values.len() == 0 {
@@ -445,7 +509,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL" => {
+                id if id == TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL => {
                     let config = {
                         let data_read = ctx.data.read().await;
                         let database = data_read
@@ -524,7 +588,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_BACK" => {
+                id if id == TTS_CONFIG_SERVER_BACK => {
                     message_component
                         .create_response(
                             &ctx.http,
@@ -554,7 +618,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER" => {
+                id if id == TTS_CONFIG_SERVER => {
                     message_component
                         .create_response(
                             &ctx.http,
@@ -584,7 +648,7 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
                 }
-                "TTS_CONFIG_SERVER_DICTIONARY" => {
+                id if id == TTS_CONFIG_SERVER_DICTIONARY => {
                     message_component
                         .create_response(
                             &ctx.http,

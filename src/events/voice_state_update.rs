@@ -82,7 +82,11 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     let tts_client = data
                         .get::<TTSClientData>()
                         .expect("Cannot get TTSClientData");
-                    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await;
+                    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await
+                        .unwrap_or_else(|e| {
+                            tracing::error!("Failed to get VOICEVOX speakers: {}", e);
+                            vec!["VOICEVOX API unavailable".to_string()]
+                        });
 
                     new_channel
                         .send_message(
