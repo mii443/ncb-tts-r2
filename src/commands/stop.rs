@@ -78,7 +78,7 @@ pub async fn stop_command(
             return Ok(());
         }
 
-        let text_channel_id = storage.get(&guild.id).unwrap().text_channel;
+        let text_channel_id = storage.get(&guild.id).unwrap().text_channels[0];
         storage.remove(&guild.id);
 
         // Remove from database

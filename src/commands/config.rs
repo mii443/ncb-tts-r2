@@ -34,7 +34,10 @@ pub async fn config_command(
     let tts_client = data_read
         .get::<TTSClientData>()
         .expect("Cannot get TTSClientData");
-    let voicevox_speakers = tts_client.voicevox_client.get_styles().await
+    let voicevox_speakers = tts_client
+        .voicevox_client
+        .get_styles()
+        .await
         .unwrap_or_else(|e| {
             tracing::error!("Failed to get VOICEVOX styles: {}", e);
             vec![("VOICEVOX API unavailable".to_string(), 1)]
@@ -58,11 +61,7 @@ pub async fn config_command(
         .placeholder("読み上げAPIを選択"),
     );
 
-    let server_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_SERVER")
-        .label("サーバー設定")
-        .style(ButtonStyle::Primary)]);
-
-    let mut components = vec![engine_select, server_button];
+    let mut components = vec![engine_select];
 
     for (index, speaker_chunk) in voicevox_speakers[0..24].chunks(25).enumerate() {
         let mut options = Vec::new();
@@ -85,6 +84,12 @@ pub async fn config_command(
             .placeholder("VOICEVOX Speakerを指定"),
         ));
     }
+
+    let server_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_SERVER")
+        .label("サーバー設定")
+        .style(ButtonStyle::Primary)]);
+
+    components.push(server_button);
 
     command
         .create_response(

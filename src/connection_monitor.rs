@@ -1,7 +1,10 @@
-use serenity::{prelude::Context, all::{CreateMessage, CreateEmbed}};
+use serenity::{
+    all::{CreateEmbed, CreateMessage},
+    prelude::Context,
+};
 use std::time::Duration;
 use tokio::time;
-use tracing::{error, info, warn, instrument};
+use tracing::{error, info, instrument, warn};
 
 use crate::data::{DatabaseClientData, TTSData};
 
@@ -69,7 +72,9 @@ impl ConnectionMonitor {
             let data_read = ctx.data.read().await;
             data_read
                 .get::<TTSData>()
-                .ok_or_else(|| ConnectionMonitorError::VoiceChannelCheck("Cannot get TTSStorage".to_string()))?
+                .ok_or_else(|| {
+                    ConnectionMonitorError::VoiceChannelCheck("Cannot get TTSStorage".to_string())
+                })?
                 .clone()
         };
 
@@ -77,7 +82,11 @@ impl ConnectionMonitor {
             let data_read = ctx.data.read().await;
             data_read
                 .get::<DatabaseClientData>()
-                .ok_or_else(|| ConnectionMonitorError::VoiceChannelCheck("Cannot get DatabaseClientData".to_string()))?
+                .ok_or_else(|| {
+                    ConnectionMonitorError::VoiceChannelCheck(
+                        "Cannot get DatabaseClientData".to_string(),
+                    )
+                })?
                 .clone()
         };
 
@@ -86,7 +95,8 @@ impl ConnectionMonitor {
 
         for (guild_id, instance) in storage.iter() {
             // Check if bot is still connected to voice channel
-            let manager = songbird::get(ctx).await
+            let manager = songbird::get(ctx)
+                .await
                 .ok_or(ConnectionMonitorError::SongbirdManagerNotFound)?;
 
             let call = manager.get(*guild_id);
@@ -114,8 +124,12 @@ impl ConnectionMonitor {
 
                 if should_reconnect {
                     // Try to reconnect with retry logic
-                    let attempts = self.reconnection_attempts.get(guild_id).copied().unwrap_or(0);
-                    
+                    let attempts = self
+                        .reconnection_attempts
+                        .get(guild_id)
+                        .copied()
+                        .unwrap_or(0);
+
                     if attempts >= MAX_RECONNECTION_ATTEMPTS {
                         error!(
                             guild_id = %guild_id,
@@ -129,7 +143,8 @@ impl ConnectionMonitor {
 
                     // Apply exponential backoff
                     if attempts > 0 {
-                        let backoff_duration = Duration::from_secs(RECONNECTION_BACKOFF_SECS * (2_u64.pow(attempts)));
+                        let backoff_duration =
+                            Duration::from_secs(RECONNECTION_BACKOFF_SECS * (2_u64.pow(attempts)));
                         warn!(
                             guild_id = %guild_id,
                             attempt = attempts + 1,
@@ -146,17 +161,24 @@ impl ConnectionMonitor {
                                 attempts = attempts + 1,
                                 "Successfully reconnected to voice channel"
                             );
-                            
+
                             // Reset reconnection attempts on success
                             self.reconnection_attempts.remove(guild_id);
-                            
+
                             // Send notification message to text channel with embed
                             let embed = CreateEmbed::new()
                                 .title("🔄 自動再接続しました")
                                 .description("読み上げを停止したい場合は `/stop` コマンドを使用してください。")
                                 .color(0x00ff00);
-                            if let Err(e) = instance.text_channel.send_message(&ctx.http, CreateMessage::new().embed(embed)).await {
-                                error!(guild_id = %guild_id, error = %e, "Failed to send reconnection message");
+
+                            // Send message to the first text channel
+                            if let Some(&text_channel) = instance.text_channels.first() {
+                                if let Err(e) = text_channel
+                                    .send_message(&ctx.http, CreateMessage::new().embed(embed))
+                                    .await
+                                {
+                                    error!(guild_id = %guild_id, error = %e, "Failed to send reconnection message");
+                                }
                             }
                         }
                         Err(e) => {
@@ -168,7 +190,7 @@ impl ConnectionMonitor {
                                 error = %e,
                                 "Failed to reconnect to voice channel"
                             );
-                            
+
                             if new_attempts >= MAX_RECONNECTION_ATTEMPTS {
                                 guilds_to_remove.push(*guild_id);
                                 self.reconnection_attempts.remove(guild_id);
@@ -201,10 +223,10 @@ impl ConnectionMonitor {
                     error!(guild_id = %guild_id, error = %e, "Failed to remove bot from voice channel");
                 }
             }
-            
+
             info!(guild_id = %guild_id, "Removed disconnected TTS instance");
         }
-        
+
         Ok(())
     }
 
@@ -215,21 +237,29 @@ impl ConnectionMonitor {
         ctx: &Context,
         instance: &crate::tts::instance::TTSInstance,
     ) -> Result<bool> {
-        let channels = instance.guild.channels(&ctx.http).await
-            .map_err(|e| ConnectionMonitorError::VoiceChannelCheck(format!("Failed to get guild channels: {}", e)))?;
+        let channels = instance.guild.channels(&ctx.http).await.map_err(|e| {
+            ConnectionMonitorError::VoiceChannelCheck(format!(
+                "Failed to get guild channels: {}",
+                e
+            ))
+        })?;
 
         if let Some(channel) = channels.get(&instance.voice_channel) {
-            let members = channel.members(&ctx.cache)
-                .map_err(|e| ConnectionMonitorError::VoiceChannelCheck(format!("Failed to get channel members: {}", e)))?;
+            let members = channel.members(&ctx.cache).map_err(|e| {
+                ConnectionMonitorError::VoiceChannelCheck(format!(
+                    "Failed to get channel members: {}",
+                    e
+                ))
+            })?;
             let user_count = members.iter().filter(|member| !member.user.bot).count();
-            
+
             info!(
                 guild_id = %instance.guild,
                 channel_id = %instance.voice_channel,
                 user_count = user_count,
                 "Checked voice channel users"
             );
-            
+
             Ok(user_count > 0)
         } else {
             warn!(

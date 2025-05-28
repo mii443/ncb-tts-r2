@@ -81,32 +81,44 @@ pub async fn setup_command(
             return Ok(());
         }
 
-        let text_channel_id = {
+        let text_channel_ids = {
             if let Some(mode) = command.data.options.get(0) {
                 match &mode.value {
                     serenity::all::CommandDataOptionValue::String(value) => {
                         match value.as_str() {
-                            "TEXT_CHANNEL" => command.channel_id,
+                            "TEXT_CHANNEL" => vec![command.channel_id],
                             "NEW_THREAD" => {
-                                command
-                                    .channel_id
-                                    .create_thread(&ctx.http, CreateThread::new("TTS").auto_archive_duration(AutoArchiveDuration::OneHour).kind(serenity::all::ChannelType::PublicThread))
-                                    .await
-                                    .unwrap()
-                                    .id
+                                vec![command
+                                .channel_id
+                                .create_thread(&ctx.http, CreateThread::new("TTS").auto_archive_duration(AutoArchiveDuration::OneHour).kind(serenity::all::ChannelType::PublicThread))
+                                .await
+                                .unwrap()
+                                .id]
                             }
-                            "VOICE_CHANNEL" => channel_id,
-                            _ => channel_id,
+                            "VOICE_CHANNEL" => vec![channel_id],
+                            _ => if channel_id != command.channel_id {
+                                vec![command.channel_id, channel_id]
+                            } else {
+                                vec![channel_id]
+                            },
                         }
                     },
-                    _ => channel_id,
+                    _ => if channel_id != command.channel_id {
+                        vec![command.channel_id, channel_id]
+                    } else {
+                        vec![channel_id]
+                    },
                 }
             } else {
-                channel_id
+                if channel_id != command.channel_id {
+                    vec![command.channel_id, channel_id]
+                } else {
+                    vec![channel_id]
+                }
             }
         };
 
-        let instance = TTSInstance::new(text_channel_id, channel_id, guild.id);
+        let instance = TTSInstance::new(text_channel_ids.clone(), channel_id, guild.id);
         storage.insert(guild.id, instance.clone());
 
         // Save to database
@@ -121,7 +133,7 @@ pub async fn setup_command(
             tracing::error!("Failed to save TTS instance to database: {}", e);
         }
 
-        text_channel_id
+        text_channel_ids[0]
     };
 
     command

@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
-use bb8_redis::{bb8::Pool, RedisConnectionManager, redis::AsyncCommands};
 use crate::{
-    errors::{NCBError, Result, constants::*},
+    errors::{constants::*, NCBError, Result},
     tts::{
         gcp_tts::structs::voice_selection_params::VoiceSelectionParams, instance::TTSInstance,
         tts_type::TTSType,
     },
 };
-use serenity::model::id::{GuildId, UserId, ChannelId};
+use bb8_redis::{bb8::Pool, redis::AsyncCommands, RedisConnectionManager};
+use serenity::model::id::{ChannelId, GuildId, UserId};
 use std::collections::HashMap;
 
 use super::{dictionary::Dictionary, server_config::ServerConfig, user_config::UserConfig};
@@ -22,7 +22,7 @@ impl Database {
     pub fn new(pool: Pool<RedisConnectionManager>) -> Self {
         Self { pool }
     }
-    
+
     pub async fn new_with_url(redis_url: String) -> Result<Self> {
         let manager = RedisConnectionManager::new(redis_url)?;
         let pool = Pool::builder()
@@ -62,13 +62,13 @@ impl Database {
     }
 
     #[tracing::instrument]
-    async fn get_config<T: serde::de::DeserializeOwned>(
-        &self,
-        key: &str,
-    ) -> Result<Option<T>> {
-        let mut connection = self.pool.get().await
+    async fn get_config<T: serde::de::DeserializeOwned>(&self, key: &str) -> Result<Option<T>> {
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
-            
+
         let config: String = connection.get(key).await.unwrap_or_default();
 
         if config.is_empty() {
@@ -85,24 +85,20 @@ impl Database {
     }
 
     #[tracing::instrument]
-    async fn set_config<T: serde::Serialize + Debug>(
-        &self,
-        key: &str,
-        config: &T,
-    ) -> Result<()> {
-        let mut connection = self.pool.get().await
+    async fn set_config<T: serde::Serialize + Debug>(&self, key: &str, config: &T) -> Result<()> {
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
-            
+
         let config_str = serde_json::to_string(config)?;
         connection.set::<_, _, ()>(key, config_str).await?;
         Ok(())
     }
 
     #[tracing::instrument]
-    pub async fn get_server_config(
-        &self,
-        server_id: u64,
-    ) -> Result<Option<ServerConfig>> {
+    pub async fn get_server_config(&self, server_id: u64) -> Result<Option<ServerConfig>> {
         self.get_config(&Self::server_key(server_id)).await
     }
 
@@ -112,20 +108,12 @@ impl Database {
     }
 
     #[tracing::instrument]
-    pub async fn set_server_config(
-        &self,
-        server_id: u64,
-        config: ServerConfig,
-    ) -> Result<()> {
+    pub async fn set_server_config(&self, server_id: u64, config: ServerConfig) -> Result<()> {
         self.set_config(&Self::server_key(server_id), &config).await
     }
 
     #[tracing::instrument]
-    pub async fn set_user_config(
-        &self,
-        user_id: u64,
-        config: UserConfig,
-    ) -> Result<()> {
+    pub async fn set_user_config(&self, user_id: u64, config: UserConfig) -> Result<()> {
         self.set_config(&Self::user_key(user_id), &config).await
     }
 
@@ -134,8 +122,9 @@ impl Database {
         let config = ServerConfig {
             dictionary: Dictionary::new(),
             autostart_channel_id: None,
-            voice_state_announce: Some(true),
-            read_username: Some(true),
+            autostart_text_channel_id: None,
+            voice_state_announce: Some(false),
+            read_username: Some(false),
         };
 
         self.set_server_config(server_id, config).await
@@ -173,10 +162,7 @@ impl Database {
     }
 
     #[tracing::instrument]
-    pub async fn get_user_config_or_default(
-        &self,
-        user_id: u64,
-    ) -> Result<Option<UserConfig>> {
+    pub async fn get_user_config_or_default(&self, user_id: u64) -> Result<Option<UserConfig>> {
         match self.get_user_config(user_id).await? {
             Some(config) => Ok(Some(config)),
             None => {
@@ -187,11 +173,7 @@ impl Database {
     }
 
     /// Save TTS instance to database
-    pub async fn save_tts_instance(
-        &self,
-        guild_id: GuildId,
-        instance: &TTSInstance,
-    ) -> Result<()> {
+    pub async fn save_tts_instance(&self, guild_id: GuildId, instance: &TTSInstance) -> Result<()> {
         let key = Self::tts_instance_key(guild_id.get());
         let list_key = Self::tts_instances_list_key();
 
@@ -199,19 +181,21 @@ impl Database {
         self.set_config(&key, instance).await?;
 
         // Add guild_id to the list of active instances
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
-            
-        connection.sadd::<_, _, ()>(&list_key, guild_id.get()).await?;
+
+        connection
+            .sadd::<_, _, ()>(&list_key, guild_id.get())
+            .await?;
         Ok(())
     }
 
     /// Load TTS instance from database
     #[tracing::instrument]
-    pub async fn load_tts_instance(
-        &self,
-        guild_id: GuildId,
-    ) -> Result<Option<TTSInstance>> {
+    pub async fn load_tts_instance(&self, guild_id: GuildId) -> Result<Option<TTSInstance>> {
         let key = Self::tts_instance_key(guild_id.get());
         self.get_config(&key).await
     }
@@ -222,12 +206,16 @@ impl Database {
         let key = Self::tts_instance_key(guild_id.get());
         let list_key = Self::tts_instances_list_key();
 
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
-            
+
         let _: std::result::Result<(), bb8_redis::redis::RedisError> = connection.del(&key).await;
-        let _: std::result::Result<(), bb8_redis::redis::RedisError> = connection.srem(&list_key, guild_id.get()).await;
-        
+        let _: std::result::Result<(), bb8_redis::redis::RedisError> =
+            connection.srem(&list_key, guild_id.get()).await;
+
         Ok(())
     }
 
@@ -236,9 +224,12 @@ impl Database {
     pub async fn get_all_tts_instances(&self) -> Result<Vec<(GuildId, TTSInstance)>> {
         let list_key = Self::tts_instances_list_key();
 
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
-            
+
         let guild_ids: Vec<u64> = connection.smembers(&list_key).await.unwrap_or_default();
         let mut instances = Vec::new();
 
@@ -274,39 +265,34 @@ impl Database {
         self.get_config(&key).await
     }
 
-    pub async fn delete_user_config(
-        &self,
-        guild_id: GuildId,
-        user_id: UserId,
-    ) -> Result<()> {
+    pub async fn delete_user_config(&self, guild_id: GuildId, user_id: UserId) -> Result<()> {
         let key = Self::user_config_key(guild_id.get(), user_id.get());
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
         let _: std::result::Result<(), bb8_redis::redis::RedisError> = connection.del(&key).await;
         Ok(())
     }
 
     // Additional server config methods
-    pub async fn save_server_config(
-        &self,
-        guild_id: GuildId,
-        config: &ServerConfig,
-    ) -> Result<()> {
+    pub async fn save_server_config(&self, guild_id: GuildId, config: &ServerConfig) -> Result<()> {
         let key = Self::server_config_key(guild_id.get());
         self.set_config(&key, config).await
     }
 
-    pub async fn load_server_config(
-        &self,
-        guild_id: GuildId,
-    ) -> Result<Option<ServerConfig>> {
+    pub async fn load_server_config(&self, guild_id: GuildId) -> Result<Option<ServerConfig>> {
         let key = Self::server_config_key(guild_id.get());
         self.get_config(&key).await
     }
 
     pub async fn delete_server_config(&self, guild_id: GuildId) -> Result<()> {
         let key = Self::server_config_key(guild_id.get());
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
         let _: std::result::Result<(), bb8_redis::redis::RedisError> = connection.del(&key).await;
         Ok(())
@@ -322,10 +308,7 @@ impl Database {
         self.set_config(&key, dictionary).await
     }
 
-    pub async fn load_dictionary(
-        &self,
-        guild_id: GuildId,
-    ) -> Result<HashMap<String, String>> {
+    pub async fn load_dictionary(&self, guild_id: GuildId) -> Result<HashMap<String, String>> {
         let key = Self::dictionary_key(guild_id.get());
         let dict: Option<HashMap<String, String>> = self.get_config(&key).await?;
         Ok(dict.unwrap_or_default())
@@ -333,7 +316,10 @@ impl Database {
 
     pub async fn delete_dictionary(&self, guild_id: GuildId) -> Result<()> {
         let key = Self::dictionary_key(guild_id.get());
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
         let _: std::result::Result<(), bb8_redis::redis::RedisError> = connection.del(&key).await;
         Ok(())
@@ -345,7 +331,10 @@ impl Database {
 
     pub async fn list_active_instances(&self) -> Result<Vec<u64>> {
         let list_key = Self::tts_instances_list_key();
-        let mut connection = self.pool.get().await
+        let mut connection = self
+            .pool
+            .get()
+            .await
             .map_err(|e| NCBError::Database(format!("Pool connection failed: {}", e)))?;
         let guild_ids: Vec<u64> = connection.smembers(&list_key).await.unwrap_or_default();
         Ok(guild_ids)
@@ -355,9 +344,9 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::constants;
     use bb8_redis::redis::AsyncCommands;
     use serial_test::serial;
-    use crate::errors::constants;
 
     // Helper function to create test database (requires Redis running)
     async fn create_test_database() -> Result<Database> {
@@ -422,16 +411,19 @@ mod tests {
         };
 
         let guild_id = GuildId::new(12345);
-        let test_instance = TTSInstance::new(
-            ChannelId::new(123),
-            ChannelId::new(456),
-            guild_id
-        );
+        let test_instance =
+            TTSInstance::new_single(ChannelId::new(123), ChannelId::new(456), guild_id);
 
         // Clear any existing data
         if let Ok(mut conn) = db.pool.get().await {
-            let _: () = conn.del(Database::tts_instance_key(guild_id.get())).await.unwrap_or_default();
-            let _: () = conn.srem(Database::tts_instances_list_key(), guild_id.get()).await.unwrap_or_default();
+            let _: () = conn
+                .del(Database::tts_instance_key(guild_id.get()))
+                .await
+                .unwrap_or_default();
+            let _: () = conn
+                .srem(Database::tts_instances_list_key(), guild_id.get())
+                .await
+                .unwrap_or_default();
         } else {
             return; // Skip if can't get connection
         }
@@ -452,7 +444,7 @@ mod tests {
         let loaded_instance = load_result.unwrap();
         if let Some(instance) = loaded_instance {
             assert_eq!(instance.guild, test_instance.guild);
-            assert_eq!(instance.text_channel, test_instance.text_channel);
+            assert_eq!(instance.text_channels, test_instance.text_channels);
             assert_eq!(instance.voice_channel, test_instance.voice_channel);
         }
 

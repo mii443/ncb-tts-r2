@@ -15,20 +15,52 @@ use crate::tts::message::TTSMessage;
 pub struct TTSInstance {
     #[serde(skip)] // Messageは複雑すぎるのでシリアライズしない
     pub before_message: Option<Message>,
-    pub text_channel: ChannelId,
+    pub text_channels: Vec<ChannelId>,
     pub voice_channel: ChannelId,
     pub guild: GuildId,
 }
 
 impl TTSInstance {
     /// Create a new TTSInstance
-    pub fn new(text_channel: ChannelId, voice_channel: ChannelId, guild: GuildId) -> Self {
+    pub fn new(text_channels: Vec<ChannelId>, voice_channel: ChannelId, guild: GuildId) -> Self {
         Self {
             before_message: None,
-            text_channel,
+            text_channels,
             voice_channel,
             guild,
         }
+    }
+
+    /// Create a new TTSInstance with a single text channel
+    pub fn new_single(text_channel: ChannelId, voice_channel: ChannelId, guild: GuildId) -> Self {
+        Self::new(vec![text_channel], voice_channel, guild)
+    }
+
+    /// Add a text channel to the instance
+    pub fn add_text_channel(&mut self, channel_id: ChannelId) {
+        if !self.text_channels.contains(&channel_id) {
+            self.text_channels.push(channel_id);
+        }
+    }
+
+    /// Remove a text channel from the instance
+    pub fn remove_text_channel(&mut self, channel_id: ChannelId) -> bool {
+        if let Some(pos) = self.text_channels.iter().position(|&x| x == channel_id) {
+            self.text_channels.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if a channel is in the text channels list
+    pub fn contains_text_channel(&self, channel_id: ChannelId) -> bool {
+        self.text_channels.contains(&channel_id)
+    }
+
+    /// Get all text channels
+    pub fn get_text_channels(&self) -> &Vec<ChannelId> {
+        &self.text_channels
     }
 
     pub async fn check_connection(&self, ctx: &Context) -> bool {

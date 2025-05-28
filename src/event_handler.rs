@@ -55,55 +55,60 @@ impl EventHandler for Handler {
             }
 
             let rows = modal.data.components.clone();
-            
+
             // Extract rule name with proper error handling
-            let rule_name = match rows.get(0)
-                .and_then(|row| row.components.get(0))
-                .and_then(|component| {
-                    if let ActionRowComponent::InputText(text) = component {
-                        text.value.as_ref()
-                    } else {
-                        None
+            let rule_name =
+                match rows
+                    .get(0)
+                    .and_then(|row| row.components.get(0))
+                    .and_then(|component| {
+                        if let ActionRowComponent::InputText(text) = component {
+                            text.value.as_ref()
+                        } else {
+                            None
+                        }
+                    }) {
+                    Some(name) => {
+                        if let Err(e) = validation::validate_rule_name(name) {
+                            tracing::error!("Invalid rule name: {}", e);
+                            return;
+                        }
+                        name.clone()
                     }
-                }) {
-                Some(name) => {
-                    if let Err(e) = validation::validate_rule_name(name) {
-                        tracing::error!("Invalid rule name: {}", e);
+                    None => {
+                        tracing::error!("Cannot extract rule name from modal");
                         return;
                     }
-                    name.clone()
-                },
-                None => {
-                    tracing::error!("Cannot extract rule name from modal");
-                    return;
-                }
-            };
+                };
 
             // Extract 'from' field with validation
-            let from = match rows.get(1)
-                .and_then(|row| row.components.get(0))
-                .and_then(|component| {
-                    if let ActionRowComponent::InputText(text) = component {
-                        text.value.as_ref()
-                    } else {
-                        None
+            let from =
+                match rows
+                    .get(1)
+                    .and_then(|row| row.components.get(0))
+                    .and_then(|component| {
+                        if let ActionRowComponent::InputText(text) = component {
+                            text.value.as_ref()
+                        } else {
+                            None
+                        }
+                    }) {
+                    Some(pattern) => {
+                        if let Err(e) = validation::validate_regex_pattern(pattern) {
+                            tracing::error!("Invalid regex pattern: {}", e);
+                            return;
+                        }
+                        pattern.clone()
                     }
-                }) {
-                Some(pattern) => {
-                    if let Err(e) = validation::validate_regex_pattern(pattern) {
-                        tracing::error!("Invalid regex pattern: {}", e);
+                    None => {
+                        tracing::error!("Cannot extract regex pattern from modal");
                         return;
                     }
-                    pattern.clone()
-                },
-                None => {
-                    tracing::error!("Cannot extract regex pattern from modal");
-                    return;
-                }
-            };
+                };
 
             // Extract 'to' field with validation
-            let to = match rows.get(2)
+            let to = match rows
+                .get(2)
                 .and_then(|row| row.components.get(0))
                 .and_then(|component| {
                     if let ActionRowComponent::InputText(text) = component {
@@ -118,7 +123,7 @@ impl EventHandler for Handler {
                         return;
                     }
                     replacement.clone()
-                },
+                }
                 None => {
                     tracing::error!("Cannot extract replacement text from modal");
                     return;
@@ -143,12 +148,15 @@ impl EventHandler for Handler {
                     }
                 };
 
-                match database.get_server_config_or_default(modal.guild_id.unwrap().get()).await {
+                match database
+                    .get_server_config_or_default(modal.guild_id.unwrap().get())
+                    .await
+                {
                     Ok(Some(config)) => config,
                     Ok(None) => {
                         tracing::error!("No server config found");
                         return;
-                    },
+                    }
                     Err(e) => {
                         tracing::error!("Database error: {}", e);
                         return;
@@ -166,7 +174,10 @@ impl EventHandler for Handler {
                     }
                 };
 
-                if let Err(e) = database.set_server_config(modal.guild_id.unwrap().get(), config).await {
+                if let Err(e) = database
+                    .set_server_config(modal.guild_id.unwrap().get(), config)
+                    .await
+                {
                     tracing::error!("Failed to save server config: {}", e);
                     return;
                 }
@@ -502,8 +513,64 @@ impl EventHandler for Handler {
                         .create_response(
                             &ctx.http,
                             CreateInteractionResponse::UpdateMessage(
-                                CreateInteractionResponseMessage::new()
-                                    .content(response_content),
+                                CreateInteractionResponseMessage::new().content(response_content),
+                            ),
+                        )
+                        .await
+                        .unwrap();
+                }
+                id if id == SET_AUTOSTART_TEXT_CHANNEL => {
+                    let autostart_text_channel_id = match message_component.data.kind {
+                        ComponentInteractionDataKind::StringSelect { ref values, .. } => {
+                            if values.len() == 0 {
+                                None
+                            } else if values[0] == "SET_AUTOSTART_TEXT_CHANNEL_CLEAR" {
+                                None
+                            } else {
+                                Some(
+                                    u64::from_str_radix(
+                                        &values[0]
+                                            .strip_prefix("SET_AUTOSTART_TEXT_CHANNEL_")
+                                            .unwrap(),
+                                        10,
+                                    )
+                                    .unwrap(),
+                                )
+                            }
+                        }
+                        _ => panic!("Cannot get index"),
+                    };
+
+                    {
+                        let data_read = ctx.data.read().await;
+                        let database = data_read
+                            .get::<DatabaseClientData>()
+                            .expect("Cannot get DatabaseClientData")
+                            .clone();
+
+                        let mut config = database
+                            .get_server_config_or_default(message_component.guild_id.unwrap().get())
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        config.autostart_text_channel_id = autostart_text_channel_id;
+                        database
+                            .set_server_config(message_component.guild_id.unwrap().get(), config)
+                            .await
+                            .unwrap();
+                    }
+
+                    let response_content = if autostart_text_channel_id.is_some() {
+                        "自動参加テキストチャンネルを設定しました。"
+                    } else {
+                        "自動参加テキストチャンネルを解除しました。"
+                    };
+
+                    message_component
+                        .create_response(
+                            &ctx.http,
+                            CreateInteractionResponse::UpdateMessage(
+                                CreateInteractionResponseMessage::new().content(response_content),
                             ),
                         )
                         .await
@@ -534,17 +601,15 @@ impl EventHandler for Handler {
                         .unwrap();
 
                     let mut options = Vec::new();
-                    
+
                     // 解除オプションを追加
-                    let clear_option = CreateSelectMenuOption::new(
-                        "解除",
-                        "SET_AUTOSTART_CHANNEL_CLEAR",
-                    )
-                    .description("自動参加チャンネルを解除します")
-                    .default_selection(autostart_channel_id == 0);
+                    let clear_option =
+                        CreateSelectMenuOption::new("解除", "SET_AUTOSTART_CHANNEL_CLEAR")
+                            .description("自動参加チャンネルを解除します")
+                            .default_selection(autostart_channel_id == 0);
                     options.push(clear_option);
 
-                    for (id, channel) in channels {
+                    for (id, channel) in channels.clone() {
                         if channel.kind != ChannelType::Voice {
                             continue;
                         }
@@ -562,6 +627,33 @@ impl EventHandler for Handler {
                         options.push(option);
                     }
 
+                    let mut text_channel_options = Vec::new();
+
+                    let clear_option =
+                        CreateSelectMenuOption::new("解除", "SET_AUTOSTART_TEXT_CHANNEL_CLEAR")
+                            .description("自動参加テキストチャンネルを解除します")
+                            .default_selection(config.autostart_text_channel_id.is_none());
+                    text_channel_options.push(clear_option);
+
+                    for (id, channel) in channels {
+                        if channel.kind != ChannelType::Text {
+                            continue;
+                        }
+
+                        let description = channel
+                            .topic
+                            .unwrap_or_else(|| String::from("No topic provided."));
+                        let option = CreateSelectMenuOption::new(
+                            &channel.name,
+                            format!("SET_AUTOSTART_TEXT_CHANNEL_{}", id.get()),
+                        )
+                        .description(description)
+                        .default_selection(
+                            channel.id.get() == config.autostart_text_channel_id.unwrap_or(0),
+                        );
+                        text_channel_options.push(option);
+                    }
+
                     message_component
                         .create_response(
                             &ctx.http,
@@ -573,6 +665,16 @@ impl EventHandler for Handler {
                                             CreateSelectMenu::new(
                                                 "SET_AUTOSTART_CHANNEL",
                                                 CreateSelectMenuKind::String { options },
+                                            )
+                                            .min_values(0)
+                                            .max_values(1),
+                                        ),
+                                        CreateActionRow::SelectMenu(
+                                            CreateSelectMenu::new(
+                                                "SET_AUTOSTART_TEXT_CHANNEL",
+                                                CreateSelectMenuKind::String {
+                                                    options: text_channel_options,
+                                                },
                                             )
                                             .min_values(0)
                                             .max_values(1),

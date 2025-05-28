@@ -62,7 +62,14 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                         .expect("Cannot get songbird client.")
                         .clone();
 
-                    let instance = TTSInstance::new(new_channel, new_channel, guild_id);
+                    let text_channel_ids =
+                        if let Some(text_channel_id) = config.autostart_text_channel_id {
+                            vec![text_channel_id.into(), new_channel]
+                        } else {
+                            vec![new_channel]
+                        };
+
+                    let instance = TTSInstance::new(text_channel_ids, new_channel, guild_id);
                     storage.insert(guild_id, instance.clone());
 
                     // Save to database
@@ -82,7 +89,10 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     let tts_client = data
                         .get::<TTSClientData>()
                         .expect("Cannot get TTSClientData");
-                    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await
+                    let voicevox_speakers = tts_client
+                        .voicevox_client
+                        .get_speakers()
+                        .await
                         .unwrap_or_else(|e| {
                             tracing::error!("Failed to get VOICEVOX speakers: {}", e);
                             vec!["VOICEVOX API unavailable".to_string()]
@@ -142,12 +152,15 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             }
 
             if del_flag {
-                let _ = storage
-                    .get(&guild_id)
-                    .unwrap()
-                    .text_channel
-                    .edit_thread(&ctx.http, EditThread::new().archived(true))
-                    .await;
+                // Archive thread if it exists
+                if let Some(&channel_id) = storage.get(&guild_id).unwrap().text_channels.first() {
+                    let http = ctx.http.clone();
+                    tokio::spawn(async move {
+                        let _ = channel_id
+                            .edit_thread(&http, EditThread::new().archived(true))
+                            .await;
+                    });
+                }
                 storage.remove(&guild_id);
 
                 // Remove from database
