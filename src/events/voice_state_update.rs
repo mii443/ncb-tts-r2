@@ -48,10 +48,6 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
             .unwrap()
     };
 
-    if !config.voice_state_announce.unwrap_or(true) {
-        return;
-    }
-
     {
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild_id) {
@@ -124,20 +120,22 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
 
         let voice_move_state = new.move_state(&old, instance.voice_channel);
 
-        let message: Option<String> = match voice_move_state {
-            VoiceMoveState::JOIN => Some(format!(
-                "{} さんが通話に参加しました",
-                new.member.unwrap().read_name()
-            )),
-            VoiceMoveState::LEAVE => Some(format!(
-                "{} さんが通話から退出しました",
-                new.member.unwrap().read_name()
-            )),
-            _ => None,
-        };
+        if config.voice_state_announce.unwrap_or(false) {
+            let message: Option<String> = match voice_move_state {
+                VoiceMoveState::JOIN => Some(format!(
+                    "{} さんが通話に参加しました",
+                    new.member.unwrap().read_name()
+                )),
+                VoiceMoveState::LEAVE => Some(format!(
+                    "{} さんが通話から退出しました",
+                    new.member.unwrap().read_name()
+                )),
+                _ => None,
+            };
 
-        if let Some(message) = message {
-            instance.read(AnnounceMessage { message }, &ctx).await;
+            if let Some(message) = message {
+                instance.read(AnnounceMessage { message }, &ctx).await;
+            }
         }
 
         if voice_move_state == VoiceMoveState::LEAVE {
