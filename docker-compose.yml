@@ -1,14 +1,24 @@
 version: '3'
 
 services:
-    ncb-tts-r2:
-        container_name: ncb-tts-r2
-        image: ghcr.io/mii443/ncb-tts-r2:1.11.2
-        environment:
-        - NCB_TOKEN=YOUR_BOT_TOKEN
-        - NCB_APP_ID=YOUR_BOT_ID
-        - NCB_PREFIX=BOT_PREFIX
-        - NCB_REDIS_URL=redis://<REDIS_IP>/
-        - NCB_VOICEVOX_KEY=VOICEVOX_KEY
-        volumes:
-        - ./credentials.json:/ncb-tts-r2/credentials.json:ro
+  ncb-tts-r2:
+    container_name: ncb-tts-r2
+    image: ghcr.io/mii443/ncb-tts-r2:1.13.1
+    environment:
+    - NCB_TOKEN=YOUR_BOT_TOKEN
+    - NCB_APP_ID=YOUR_BOT_ID
+    - NCB_PREFIX=BOT_PREFIX
+    - NCB_REDIS_URL=redis://redis:6379/
+    - NCB_VOICEVOX_ORIGINAL_API_URL=http://voicevox_engine:50021
+    volumes:
+    - ./credentials.json:/ncb-tts-r2/credentials.json:ro
+  redis:
+    container_name: redis
+    image: redis:latest
+    ports:
+    - "6379:6379"
+  voicevox_engine:
+    image: voicevox/voicevox_engine:cpu-latest
+    container_name: voicevox_engine
+    ports:
+      - "50021:50021"
