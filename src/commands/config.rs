@@ -39,6 +39,8 @@ pub async fn config_command(
                         .default_selection(tts_type == TTSType::GCP),
                     CreateSelectMenuOption::new("VOICEVOX", "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX")
                         .default_selection(tts_type == TTSType::VOICEVOX),
+                    CreateSelectMenuOption::new("Toriel", "TTS_CONFIG_ENGINE_SELECTED_TORIEL")
+                        .default_selection(tts_type == TTSType::TORIEL),
                 ],
             },
         )

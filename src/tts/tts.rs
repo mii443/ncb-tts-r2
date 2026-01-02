@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use songbird::{driver::Bitrate, input::cached::Compressed, tracks::Track};
 use tracing::{debug, error, info, instrument, warn};
 
+use crate::tts::toriel::toriel::TorielTTS;
 use crate::{
     errors::{constants::*, NCBError, Result},
     utils::{retry_with_backoff, CircuitBreaker, PerformanceMetrics},
@@ -26,6 +27,7 @@ use super::{
 pub struct TTS {
     pub voicevox_client: VOICEVOX,
     gcp_tts_client: GCPTTS,
+    toriel_tts_client: TorielTTS,
     cache: Arc<RwLock<LruCache<CacheKey, Compressed>>>,
     voicevox_circuit_breaker: Arc<RwLock<CircuitBreaker>>,
     gcp_circuit_breaker: Arc<RwLock<CircuitBreaker>>,
@@ -48,10 +50,15 @@ struct CacheEntry {
 }
 
 impl TTS {
-    pub fn new(voicevox_client: VOICEVOX, gcp_tts_client: GCPTTS) -> Self {
+    pub fn new(
+        voicevox_client: VOICEVOX,
+        gcp_tts_client: GCPTTS,
+        toriel_tts_client: TorielTTS,
+    ) -> Self {
         let tts = Self {
             voicevox_client,
             gcp_tts_client,
+            toriel_tts_client,
             cache: Arc::new(RwLock::new(LruCache::new(
                 NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap(),
             ))),
@@ -289,6 +296,11 @@ impl TTS {
                 )))
             }
         }
+    }
+
+    pub async fn synthesize_toriel(&self, text: &str) -> std::result::Result<Track, NCBError> {
+        let audio = self.toriel_tts_client.synthesize(text).unwrap();
+        Ok(Track::from(audio))
     }
 
     /// Load cache from persistent storage

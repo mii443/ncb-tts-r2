@@ -33,13 +33,16 @@ impl TTSMessage for Message {
                     e
                 })
                 .unwrap(); // This is safe as we're in a critical path
-            
-            match database.get_server_config_or_default(instance.guild.get()).await {
+
+            match database
+                .get_server_config_or_default(instance.guild.get())
+                .await
+            {
                 Ok(Some(config)) => config,
                 Ok(None) => {
                     error!(guild_id = %instance.guild, "No server config available");
                     return self.content.clone(); // Fallback to original text
-                },
+                }
                 Err(e) => {
                     error!(guild_id = %instance.guild, error = %e, "Failed to get server config");
                     return self.content.clone(); // Fallback to original text
@@ -47,13 +50,13 @@ impl TTSMessage for Message {
             }
         };
         let mut text = self.content.clone();
-        
+
         // Validate text length before processing
         if let Err(e) = validation::validate_tts_text(&text) {
             warn!(error = %e, "Invalid TTS text, using truncated version");
             text.truncate(crate::errors::constants::MAX_TTS_TEXT_LENGTH);
         }
-        
+
         for rule in config.dictionary.rules {
             if rule.is_regex {
                 match get_cached_regex(&rule.rule) {
@@ -118,8 +121,11 @@ impl TTSMessage for Message {
                 .get::<DatabaseClientData>()
                 .ok_or_else(|| NCBError::config("Cannot get DatabaseClientData"))
                 .unwrap();
-            
-            match database.get_user_config_or_default(self.author.id.get()).await {
+
+            match database
+                .get_user_config_or_default(self.author.id.get())
+                .await
+            {
                 Ok(Some(config)) => config,
                 Ok(None) | Err(_) => {
                     error!(user_id = %self.author.id, "Failed to get user config, using defaults");
@@ -177,15 +183,27 @@ impl TTSMessage for Message {
                     || {
                         tts.synthesize_voicevox(
                             &processed_text,
-                            config.voicevox_speaker.unwrap_or(crate::errors::constants::DEFAULT_VOICEVOX_SPEAKER),
+                            config
+                                .voicevox_speaker
+                                .unwrap_or(crate::errors::constants::DEFAULT_VOICEVOX_SPEAKER),
                         )
                     },
                     3, // max attempts
                     std::time::Duration::from_millis(500),
-                ).await
+                )
+                .await
+            }
+            TTSType::TORIEL => {
+                let processed_text = text.replace("<break time=\"200ms\"/>", ",");
+                retry_with_backoff(
+                    || tts.synthesize_toriel(&processed_text),
+                    3, // max attempts
+                    std::time::Duration::from_millis(500),
+                )
+                .await
             }
         };
-        
+
         match synthesis_result {
             Ok(track) => vec![track],
             Err(e) => {

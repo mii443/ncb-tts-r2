@@ -4,8 +4,10 @@
 
 use crate::{errors::Result, interactions::utils, tts::tts_type::TTSType};
 use serenity::{
-    all::{ComponentInteraction, ComponentInteractionDataKind, CreateInteractionResponse,
-        CreateInteractionResponseMessage},
+    all::{
+        ComponentInteraction, ComponentInteractionDataKind, CreateInteractionResponse,
+        CreateInteractionResponseMessage,
+    },
     prelude::Context,
 };
 
@@ -33,12 +35,18 @@ pub async fn handle_tts_config_select(
                 config.tts_type = Some(TTSType::VOICEVOX);
                 config_changed = true;
             }
+            "TTS_CONFIG_ENGINE_SELECTED_TORIEL" => {
+                config.tts_type = Some(TTSType::TORIEL);
+                config_changed = true;
+            }
             _ => {
                 if selected.starts_with("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_") {
                     let speaker_id = selected
                         .strip_prefix("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_")
                         .and_then(|id_str| id_str.parse::<i64>().ok())
-                        .ok_or_else(|| crate::errors::NCBError::invalid_input("Invalid speaker ID format"))?;
+                        .ok_or_else(|| {
+                            crate::errors::NCBError::invalid_input("Invalid speaker ID format")
+                        })?;
 
                     config.voicevox_speaker = Some(speaker_id);
                     config_changed = true;
