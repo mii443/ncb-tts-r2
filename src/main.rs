@@ -7,6 +7,7 @@ mod errors;
 mod event_handler;
 mod events;
 mod implement;
+mod interactions;
 mod stream_input;
 mod trace;
 mod tts;

@@ -8,6 +8,7 @@ pub mod config;
 pub mod data;
 pub mod implement;
 pub mod events;
+pub mod interactions;
 pub mod commands;
 pub mod stream_input;
 pub mod trace;

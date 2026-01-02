@@ -7,10 +7,7 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::{
-    data::{DatabaseClientData, TTSClientData},
-    tts::tts_type::TTSType,
-};
+use crate::{data::DatabaseClientData, tts::tts_type::TTSType};
 
 #[tracing::instrument]
 pub async fn config_command(
@@ -31,19 +28,6 @@ pub async fn config_command(
             .unwrap()
     };
 
-    let tts_client = data_read
-        .get::<TTSClientData>()
-        .expect("Cannot get TTSClientData");
-    let voicevox_speakers = tts_client
-        .voicevox_client
-        .get_styles()
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to get VOICEVOX styles: {}", e);
-            vec![("VOICEVOX API unavailable".to_string(), 1)]
-        });
-
-    let voicevox_speaker = config.voicevox_speaker.unwrap_or(1);
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);
 
     let engine_select = CreateActionRow::SelectMenu(
@@ -61,29 +45,11 @@ pub async fn config_command(
         .placeholder("読み上げAPIを選択"),
     );
 
-    let mut components = vec![engine_select];
+    let voicevox_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_VOICEVOX")
+        .label("VOICEVOX設定")
+        .style(ButtonStyle::Primary)]);
 
-    for (index, speaker_chunk) in voicevox_speakers[0..24].chunks(25).enumerate() {
-        let mut options = Vec::new();
-
-        for (name, id) in speaker_chunk {
-            options.push(
-                CreateSelectMenuOption::new(
-                    name,
-                    format!("TTS_CONFIG_VOICEVOX_SPEAKER_SELECTED_{}", id),
-                )
-                .default_selection(*id == voicevox_speaker),
-            );
-        }
-
-        components.push(CreateActionRow::SelectMenu(
-            CreateSelectMenu::new(
-                format!("TTS_CONFIG_VOICEVOX_SPEAKER_{}", index),
-                CreateSelectMenuKind::String { options },
-            )
-            .placeholder("VOICEVOX Speakerを指定"),
-        ));
-    }
+    let mut components = vec![engine_select, voicevox_button];
 
     let server_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_SERVER")
         .label("サーバー設定")

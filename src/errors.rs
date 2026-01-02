@@ -346,6 +346,8 @@ pub mod constants {
     pub const TTS_CONFIG_SERVER_BACK: &str = "TTS_CONFIG_SERVER_BACK";
     pub const TTS_CONFIG_SERVER: &str = "TTS_CONFIG_SERVER";
     pub const TTS_CONFIG_SERVER_DICTIONARY: &str = "TTS_CONFIG_SERVER_DICTIONARY";
+    pub const TTS_CONFIG_VOICEVOX: &str = "TTS_CONFIG_VOICEVOX";
+    pub const TTS_CONFIG_BACK_TO_MAIN: &str = "TTS_CONFIG_BACK_TO_MAIN";
 
     // TTS engine selection messages
     pub const TTS_CONFIG_ENGINE_SELECTED_GOOGLE: &str = "TTS_CONFIG_ENGINE_SELECTED_GOOGLE";
