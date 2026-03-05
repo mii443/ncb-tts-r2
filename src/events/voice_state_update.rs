@@ -1,5 +1,5 @@
 use crate::{
-    data::{DatabaseClientData, TTSClientData, TTSData},
+    data::UserData,
     implement::{
         member_name::ReadName,
         voice_move_state::{VoiceMoveState, VoiceMoveStateTrait},
@@ -7,13 +7,13 @@ use crate::{
     tts::{instance::TTSInstance, message::AnnounceMessage},
 };
 use serenity::{
-    all::{CreateEmbed, CreateMessage, EditThread},
+    all::{CreateEmbed, CreateMessage, EditThread, ThreadId},
     model::voice::VoiceState,
     prelude::Context,
 };
 
-pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: VoiceState) {
-    if new.member.clone().unwrap().user.bot {
+pub async fn voice_state_update(ctx: &Context, old: Option<VoiceState>, new: VoiceState) {
+    if new.member.clone().unwrap().user.bot() {
         return;
     }
 
@@ -27,36 +27,22 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
         old.clone().unwrap().guild_id.unwrap()
     };
 
-    let storage_lock = {
-        let data_read = ctx.data.read().await;
-        data_read
-            .get::<TTSData>()
-            .expect("Cannot get TTSStorage")
-            .clone()
-    };
+    let data = ctx.data::<UserData>();
+    let storage_lock = data.tts_data.clone();
+    let database = data.database.clone();
 
-    let config = {
-        let data_read = ctx.data.read().await;
-        let database = data_read
-            .get::<DatabaseClientData>()
-            .expect("Cannot get DatabaseClientData")
-            .clone();
-        database
-            .get_server_config_or_default(guild_id.get())
-            .await
-            .unwrap()
-            .unwrap()
-    };
+    let config = database
+        .get_server_config_or_default(guild_id.get())
+        .await
+        .unwrap()
+        .unwrap();
 
     {
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild_id) {
             if let Some(new_channel) = new.channel_id {
                 if config.autostart_channel_id.unwrap_or(0) == new_channel.get() {
-                    let manager = songbird::get(&ctx)
-                        .await
-                        .expect("Cannot get songbird client.")
-                        .clone();
+                    let manager = data.songbird.clone();
 
                     let text_channel_ids =
                         if let Some(text_channel_id) = config.autostart_text_channel_id {
@@ -68,23 +54,12 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                     let instance = TTSInstance::new(text_channel_ids, new_channel, guild_id);
                     storage.insert(guild_id, instance.clone());
 
-                    // Save to database
-                    let data_read = ctx.data.read().await;
-                    let database = data_read
-                        .get::<DatabaseClientData>()
-                        .expect("Cannot get DatabaseClientData")
-                        .clone();
-                    drop(data_read);
-
                     if let Err(e) = database.save_tts_instance(guild_id, &instance).await {
                         tracing::error!("Failed to save TTS instance to database: {}", e);
                     }
 
                     let _handler = manager.join(guild_id, new_channel).await;
-                    let data = ctx.data.read().await;
-                    let tts_client = data
-                        .get::<TTSClientData>()
-                        .expect("Cannot get TTSClientData");
+                    let tts_client = &data.tts_client;
                     let voicevox_speakers = tts_client
                         .voicevox_client
                         .get_speakers()
@@ -94,23 +69,17 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
                             vec!["VOICEVOX API unavailable".to_string()]
                         });
 
-                    new_channel
-                        .send_message(
-                            &ctx.http,
-                            CreateMessage::new().embed(
-                                CreateEmbed::new()
-                                    .title("自動参加 読み上げ（Serenity）")
-                                    .field(
-                                        "VOICEVOXクレジット",
-                                        format!("```\n{}\n```", voicevox_speakers.join("\n")),
-                                        false,
-                                    )
-                                    .field("設定コマンド", "`/config`", false)
-                                    .field("フィードバック", "https://feedback.mii.codes/", false),
-                            ),
+                    let embed = CreateEmbed::new()
+                        .title("自動参加 読み上げ（Serenity）")
+                        .field(
+                            "VOICEVOXクレジット",
+                            format!("```\n{}\n```", voicevox_speakers.join("\n")),
+                            false,
                         )
-                        .await
-                        .unwrap();
+                        .field("設定コマンド", "`/config`", false)
+                        .field("フィードバック", "https://feedback.mii.codes/", false);
+                    let msg = CreateMessage::new().embed(embed);
+                    new_channel.widen().send_message(&ctx.http, msg).await.unwrap();
                 }
             }
             return;
@@ -141,42 +110,31 @@ pub async fn voice_state_update(ctx: Context, old: Option<VoiceState>, new: Voic
         if voice_move_state == VoiceMoveState::LEAVE {
             let mut del_flag = false;
             for channel in guild_id.channels(&ctx.http).await.unwrap() {
-                if channel.0 == instance.voice_channel {
-                    let members = channel.1.members(&ctx.cache).unwrap();
-                    let user_count = members.iter().filter(|member| !member.user.bot).count();
+                if channel.id == instance.voice_channel {
+                    let members = channel.members(&ctx.cache).unwrap();
+                    let user_count = members.iter().filter(|member| !member.user.bot()).count();
 
                     del_flag = user_count == 0;
                 }
             }
 
             if del_flag {
-                // Archive thread if it exists
                 if let Some(&channel_id) = storage.get(&guild_id).unwrap().text_channels.first() {
                     let http = ctx.http.clone();
                     tokio::spawn(async move {
-                        let _ = channel_id
-                            .edit_thread(&http, EditThread::new().archived(true))
+                        let _ = EditThread::new()
+                            .archived(true)
+                            .execute(&http, ThreadId::new(channel_id.get()))
                             .await;
                     });
                 }
                 storage.remove(&guild_id);
 
-                // Remove from database
-                let data_read = ctx.data.read().await;
-                let database = data_read
-                    .get::<DatabaseClientData>()
-                    .expect("Cannot get DatabaseClientData")
-                    .clone();
-                drop(data_read);
-
                 if let Err(e) = database.remove_tts_instance(guild_id).await {
                     tracing::error!("Failed to remove TTS instance from database: {}", e);
                 }
 
-                let manager = songbird::get(&ctx)
-                    .await
-                    .expect("Cannot get songbird client.")
-                    .clone();
+                let manager = data.songbird.clone();
 
                 manager.remove(guild_id).await.unwrap();
             }

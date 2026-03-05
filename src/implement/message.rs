@@ -4,8 +4,8 @@ use songbird::tracks::Track;
 use tracing::{error, warn};
 
 use crate::{
-    data::{DatabaseClientData, TTSClientData},
-    errors::{constants::*, validation, NCBError},
+    data::UserData,
+    errors::{constants::*, validation},
     implement::member_name::ReadName,
     tts::{
         gcp_tts::structs::{
@@ -22,36 +22,26 @@ use crate::{
 #[async_trait]
 impl TTSMessage for Message {
     async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
-        let data_read = ctx.data.read().await;
+        let data = ctx.data::<UserData>();
 
         let config = {
-            let database = data_read
-                .get::<DatabaseClientData>()
-                .ok_or_else(|| NCBError::config("Cannot get DatabaseClientData"))
-                .map_err(|e| {
-                    error!(error = %e, "Failed to get database client");
-                    e
-                })
-                .unwrap(); // This is safe as we're in a critical path
-
-            match database
+            match data.database
                 .get_server_config_or_default(instance.guild.get())
                 .await
             {
                 Ok(Some(config)) => config,
                 Ok(None) => {
                     error!(guild_id = %instance.guild, "No server config available");
-                    return self.content.clone(); // Fallback to original text
+                    return self.content.to_string();
                 }
                 Err(e) => {
                     error!(guild_id = %instance.guild, error = %e, "Failed to get server config");
-                    return self.content.clone(); // Fallback to original text
+                    return self.content.to_string();
                 }
             }
         };
-        let mut text = self.content.clone();
+        let mut text = self.content.to_string();
 
-        // Validate text length before processing
         if let Err(e) = validation::validate_tts_text(&text) {
             warn!(error = %e, "Invalid TTS text, using truncated version");
             text.truncate(crate::errors::constants::MAX_TTS_TEXT_LENGTH);
@@ -114,22 +104,16 @@ impl TTSMessage for Message {
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
         let text = self.parse(instance, ctx).await;
 
-        let data_read = ctx.data.read().await;
+        let data = ctx.data::<UserData>();
 
         let config = {
-            let database = data_read
-                .get::<DatabaseClientData>()
-                .ok_or_else(|| NCBError::config("Cannot get DatabaseClientData"))
-                .unwrap();
-
-            match database
+            match data.database
                 .get_user_config_or_default(self.author.id.get())
                 .await
             {
                 Ok(Some(config)) => config,
                 Ok(None) | Err(_) => {
                     error!(user_id = %self.author.id, "Failed to get user config, using defaults");
-                    // Return default config
                     crate::database::user_config::UserConfig {
                         tts_type: Some(TTSType::GCP),
                         gcp_tts_voice: Some(crate::tts::gcp_tts::structs::voice_selection_params::VoiceSelectionParams {
@@ -143,12 +127,8 @@ impl TTSMessage for Message {
             }
         };
 
-        let tts = data_read
-            .get::<TTSClientData>()
-            .ok_or_else(|| NCBError::config("Cannot get TTSClientData"))
-            .unwrap();
+        let tts = &data.tts_client;
 
-        // Synthesize with retry logic
         let synthesis_result = match config.tts_type.unwrap_or(TTSType::GCP) {
             TTSType::GCP => {
                 let sanitized_text = validation::sanitize_ssml(&text);
@@ -173,7 +153,7 @@ impl TTSMessage for Message {
                             },
                         })
                     },
-                    3, // max attempts
+                    3,
                     std::time::Duration::from_millis(500),
                 ).await
             }
@@ -188,7 +168,7 @@ impl TTSMessage for Message {
                                 .unwrap_or(crate::errors::constants::DEFAULT_VOICEVOX_SPEAKER),
                         )
                     },
-                    3, // max attempts
+                    3,
                     std::time::Duration::from_millis(500),
                 )
                 .await
@@ -197,7 +177,7 @@ impl TTSMessage for Message {
                 let processed_text = text.replace("<break time=\"200ms\"/>", ",");
                 retry_with_backoff(
                     || tts.synthesize_toriel(&processed_text),
-                    3, // max attempts
+                    3,
                     std::time::Duration::from_millis(500),
                 )
                 .await
@@ -208,13 +188,12 @@ impl TTSMessage for Message {
             Ok(track) => vec![track],
             Err(e) => {
                 error!(error = %e, "TTS synthesis failed");
-                vec![] // Return empty vector on failure
+                vec![]
             }
         }
     }
 }
 
-/// Helper function to get user name with proper error handling
 async fn get_user_name(message: &Message, ctx: &Context) -> String {
     let member = message.member.clone();
     if let Some(_) = member {

@@ -1,39 +1,39 @@
 use crate::{errors::NCBError, events, interactions};
 use serenity::{
     async_trait,
-    client::{Context, EventHandler},
     model::{application::Interaction, channel::Message, gateway::Ready, voice::VoiceState},
+    prelude::{Context, EventHandler},
 };
+
+use serenity::gateway::client::FullEvent;
 
 #[derive(Clone, Debug)]
 pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    #[tracing::instrument]
-    async fn message(&self, ctx: Context, message: Message) {
-        events::message_receive::message(ctx, message).await
-    }
-
-    #[tracing::instrument]
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        events::ready::ready(ctx, ready).await
-    }
-
-    #[tracing::instrument]
-    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Err(e) = interactions::handle_interaction(&ctx, &interaction).await {
-            tracing::error!("Error handling interaction: {}", e);
-
-            // Attempt to send error message to user
-            if let Err(response_err) = self.send_error_response(&ctx, &interaction, &e).await {
-                tracing::error!("Failed to send error response: {}", response_err);
+    async fn dispatch(&self, ctx: &Context, event: &FullEvent) {
+        match event {
+            FullEvent::Message { new_message } => {
+                events::message_receive::message(ctx, new_message).await;
             }
+            FullEvent::Ready { data_about_bot } => {
+                events::ready::ready(ctx, data_about_bot).await;
+            }
+            FullEvent::InteractionCreate { interaction } => {
+                if let Err(e) = interactions::handle_interaction(ctx, interaction).await {
+                    tracing::error!("Error handling interaction: {}", e);
+                    if let Err(response_err) = self.send_error_response(ctx, interaction, &e).await
+                    {
+                        tracing::error!("Failed to send error response: {}", response_err);
+                    }
+                }
+            }
+            FullEvent::VoiceStateUpdate { old, new } => {
+                events::voice_state_update::voice_state_update(ctx, old.clone(), new.clone()).await;
+            }
+            _ => {}
         }
-    }
-
-    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
-        events::voice_state_update::voice_state_update(ctx, old, new).await
     }
 }
 

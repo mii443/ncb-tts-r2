@@ -9,11 +9,12 @@ use serenity::{
     prelude::Context,
 };
 
+use crate::data::UserData;
 use crate::tts::message::TTSMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TTSInstance {
-    #[serde(skip)] // Messageは複雑すぎるのでシリアライズしない
+    #[serde(skip)]
     pub before_message: Option<Message>,
     pub text_channels: Vec<ChannelId>,
     pub voice_channel: ChannelId,
@@ -21,7 +22,6 @@ pub struct TTSInstance {
 }
 
 impl TTSInstance {
-    /// Create a new TTSInstance
     pub fn new(text_channels: Vec<ChannelId>, voice_channel: ChannelId, guild: GuildId) -> Self {
         Self {
             before_message: None,
@@ -31,19 +31,16 @@ impl TTSInstance {
         }
     }
 
-    /// Create a new TTSInstance with a single text channel
     pub fn new_single(text_channel: ChannelId, voice_channel: ChannelId, guild: GuildId) -> Self {
         Self::new(vec![text_channel], voice_channel, guild)
     }
 
-    /// Add a text channel to the instance
     pub fn add_text_channel(&mut self, channel_id: ChannelId) {
         if !self.text_channels.contains(&channel_id) {
             self.text_channels.push(channel_id);
         }
     }
 
-    /// Remove a text channel from the instance
     pub fn remove_text_channel(&mut self, channel_id: ChannelId) -> bool {
         if let Some(pos) = self.text_channels.iter().position(|&x| x == channel_id) {
             self.text_channels.remove(pos);
@@ -53,24 +50,16 @@ impl TTSInstance {
         }
     }
 
-    /// Check if a channel is in the text channels list
     pub fn contains_text_channel(&self, channel_id: ChannelId) -> bool {
         self.text_channels.contains(&channel_id)
     }
 
-    /// Get all text channels
     pub fn get_text_channels(&self) -> &Vec<ChannelId> {
         &self.text_channels
     }
 
     pub async fn check_connection(&self, ctx: &Context) -> bool {
-        let manager = match songbird::get(ctx).await {
-            Some(manager) => manager,
-            None => {
-                tracing::error!("Cannot get songbird manager");
-                return false;
-            }
-        };
+        let manager = ctx.data::<UserData>().songbird.clone();
 
         let call = manager.get(self.guild);
         if let Some(call) = call {
@@ -84,24 +73,19 @@ impl TTSInstance {
         }
     }
 
-    /// Reconnect to the voice channel after bot restart
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     pub async fn reconnect(
         &self,
         ctx: &Context,
         skip_check: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let manager = songbird::get(&ctx)
-            .await
-            .ok_or("Songbird manager not available")?;
+        let manager = ctx.data::<UserData>().songbird.clone();
 
-        // Check if we're already connected
         if self.check_connection(&ctx).await {
             tracing::info!("Already connected to guild {}", self.guild);
             return Ok(());
         }
 
-        // Try to connect to the voice channel
         match manager.join(self.guild, self.voice_channel).await {
             Ok(_) => {
                 tracing::info!(
@@ -110,17 +94,15 @@ impl TTSInstance {
                     self.guild
                 );
 
-                // Double-check if there are users in the voice channel after connection
                 match self.guild.channels(&ctx.http).await {
                     Ok(channels) => {
                         if let Some(channel) = channels.get(&self.voice_channel) {
                             match channel.members(&ctx.cache) {
                                 Ok(members) => {
                                     let user_count =
-                                        members.iter().filter(|member| !member.user.bot).count();
+                                        members.iter().filter(|member| !member.user.bot()).count();
                                     if user_count == 0 {
                                         tracing::info!("No users found in voice channel after reconnection, disconnecting from guild {}", self.guild);
-                                        // Disconnect if no users are present
                                         let _ = manager.remove(self.guild).await;
                                         return Err(
                                             "No users in voice channel after reconnection".into()
@@ -153,13 +135,7 @@ impl TTSInstance {
         }
     }
 
-    /// Synthesize text to speech and send it to the voice channel.
-    ///
-    /// Example:
-    /// ```rust
-    /// instance.read(message, &ctx).await;
-    /// ```
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     pub async fn read<T>(&mut self, message: T, ctx: &Context)
     where
         T: TTSMessage + Debug,
@@ -167,7 +143,7 @@ impl TTSInstance {
         let audio = message.synthesize(self, ctx).await;
 
         {
-            let manager = songbird::get(&ctx).await.unwrap();
+            let manager = ctx.data::<UserData>().songbird.clone();
             let call = manager.get(self.guild).unwrap();
             let mut call = call.lock().await;
             for audio in audio {
@@ -176,9 +152,9 @@ impl TTSInstance {
         }
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     pub async fn skip(&mut self, ctx: &Context) {
-        let manager = songbird::get(&ctx).await.unwrap();
+        let manager = ctx.data::<UserData>().songbird.clone();
         let call = manager.get(self.guild).unwrap();
         let call = call.lock().await;
         let queue = call.queue();

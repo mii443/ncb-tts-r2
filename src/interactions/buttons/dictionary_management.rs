@@ -5,9 +5,10 @@
 use crate::{errors::{NCBError, Result}, interactions::utils};
 use serenity::{
     all::{
-        ComponentInteraction, CreateActionRow, CreateEmbed, CreateInputText,
-        CreateInteractionResponse, CreateInteractionResponseMessage, CreateModal,
-        CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputTextStyle,
+        ComponentInteraction, CreateActionRow, CreateComponent, CreateEmbed, CreateInputText,
+        CreateInteractionResponse, CreateInteractionResponseMessage, CreateLabel,
+        CreateModalComponent, CreateModal, CreateSelectMenu, CreateSelectMenuKind,
+        CreateSelectMenuOption, InputTextStyle,
     },
     prelude::Context,
 };
@@ -22,21 +23,26 @@ pub async fn handle_show_add_modal(
             &ctx.http,
             CreateInteractionResponse::Modal(
                 CreateModal::new("TTS_CONFIG_SERVER_ADD_DICTIONARY", "辞書追加").components(vec![
-                    CreateActionRow::InputText(
-                        CreateInputText::new(InputTextStyle::Short, "rule_name", "辞書名")
-                            .required(true),
+                    CreateModalComponent::Label(
+                        CreateLabel::input_text(
+                            "辞書名",
+                            CreateInputText::new(InputTextStyle::Short, "rule_name")
+                                .required(true),
+                        ),
                     ),
-                    CreateActionRow::InputText(
-                        CreateInputText::new(
-                            InputTextStyle::Paragraph,
-                            "from",
+                    CreateModalComponent::Label(
+                        CreateLabel::input_text(
                             "変換元（正規表現）",
-                        )
-                        .required(true),
+                            CreateInputText::new(InputTextStyle::Paragraph, "from")
+                                .required(true),
+                        ),
                     ),
-                    CreateActionRow::InputText(
-                        CreateInputText::new(InputTextStyle::Short, "to", "変換先")
-                            .required(true),
+                    CreateModalComponent::Label(
+                        CreateLabel::input_text(
+                            "変換先",
+                            CreateInputText::new(InputTextStyle::Short, "to")
+                                .required(true),
+                        ),
                     ),
                 ]),
             ),
@@ -67,14 +73,14 @@ pub async fn handle_show_remove_menu(
             CreateInteractionResponse::UpdateMessage(
                 CreateInteractionResponseMessage::new()
                     .content("削除する辞書内容を選択してください")
-                    .components(vec![CreateActionRow::SelectMenu(
+                    .components(vec![CreateComponent::ActionRow(CreateActionRow::SelectMenu(
                         CreateSelectMenu::new(
                             "TTS_CONFIG_SERVER_REMOVE_DICTIONARY_MENU",
-                            CreateSelectMenuKind::String { options },
+                            CreateSelectMenuKind::String { options: options.into() },
                         )
                         .max_values(1)
                         .min_values(0),
-                    )]),
+                    ))]),
             ),
         )
         .await

@@ -1,12 +1,10 @@
-//! VOICEVOX configuration page with pagination
-
 use crate::{
-    data::{DatabaseClientData, TTSClientData},
+    data::UserData,
     errors::{constants::*, NCBError, Result},
 };
 use serenity::{
     all::{
-        ButtonStyle, ComponentInteraction, CreateActionRow, CreateButton,
+        ButtonStyle, ComponentInteraction, CreateActionRow, CreateButton, CreateComponent,
         CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu,
         CreateSelectMenuKind, CreateSelectMenuOption,
     },
@@ -15,7 +13,6 @@ use serenity::{
 
 const SPEAKERS_PER_PAGE: usize = 25;
 
-/// Handle showing the VOICEVOX configuration page (first page)
 pub async fn handle_show_voicevox_config(
     ctx: &Context,
     interaction: &ComponentInteraction,
@@ -23,7 +20,6 @@ pub async fn handle_show_voicevox_config(
     show_voicevox_page(ctx, interaction, 0).await
 }
 
-/// Handle VOICEVOX page navigation
 pub async fn handle_voicevox_page(
     ctx: &Context,
     interaction: &ComponentInteraction,
@@ -32,31 +28,20 @@ pub async fn handle_voicevox_page(
     show_voicevox_page(ctx, interaction, page).await
 }
 
-/// Core logic to display a VOICEVOX speaker selection page
 async fn show_voicevox_page(
     ctx: &Context,
     interaction: &ComponentInteraction,
     page: usize,
 ) -> Result<()> {
-    let data_read = ctx.data.read().await;
+    let data = ctx.data::<UserData>();
 
-    // Get user config
-    let config = {
-        let database = data_read
-            .get::<DatabaseClientData>()
-            .ok_or_else(|| NCBError::config("Cannot get DatabaseClientData"))?
-            .clone();
-        database
-            .get_user_config_or_default(interaction.user.id.get())
-            .await
-            .map_err(|e| NCBError::database(format!("Failed to get user config: {}", e)))?
-            .ok_or_else(|| NCBError::config("User config not found"))?
-    };
+    let config = data.database
+        .get_user_config_or_default(interaction.user.id.get())
+        .await
+        .map_err(|e| NCBError::database(format!("Failed to get user config: {}", e)))?
+        .ok_or_else(|| NCBError::config("User config not found"))?;
 
-    // Get VOICEVOX speakers
-    let tts_client = data_read
-        .get::<TTSClientData>()
-        .ok_or_else(|| NCBError::config("Cannot get TTSClientData"))?;
+    let tts_client = &data.tts_client;
 
     let voicevox_speakers = tts_client
         .voicevox_client
@@ -69,20 +54,16 @@ async fn show_voicevox_page(
 
     let voicevox_speaker = config.voicevox_speaker.unwrap_or(1);
 
-    // Calculate pagination
     let total_speakers = voicevox_speakers.len();
     let total_pages = (total_speakers + SPEAKERS_PER_PAGE - 1) / SPEAKERS_PER_PAGE;
     let current_page = page.min(total_pages.saturating_sub(1));
 
-    // Get speakers for current page
     let start_idx = current_page * SPEAKERS_PER_PAGE;
     let end_idx = (start_idx + SPEAKERS_PER_PAGE).min(total_speakers);
     let page_speakers = &voicevox_speakers[start_idx..end_idx];
 
-    // Build components
-    let mut components = Vec::new();
+    let mut components: Vec<CreateComponent> = Vec::new();
 
-    // Speaker select menu for current page
     let mut options = Vec::new();
     for (name, id) in page_speakers {
         options.push(
@@ -94,18 +75,16 @@ async fn show_voicevox_page(
         );
     }
 
-    components.push(CreateActionRow::SelectMenu(
+    components.push(CreateComponent::ActionRow(CreateActionRow::SelectMenu(
         CreateSelectMenu::new(
             format!("TTS_CONFIG_VOICEVOX_SPEAKER_PAGE_{}", current_page),
-            CreateSelectMenuKind::String { options },
+            CreateSelectMenuKind::String { options: options.into() },
         )
         .placeholder(format!("VOICEVOX Speaker (Page {}/{})", current_page + 1, total_pages)),
-    ));
+    )));
 
-    // Pagination buttons
     let mut pagination_buttons = Vec::new();
 
-    // Previous page button
     if current_page > 0 {
         pagination_buttons.push(
             CreateButton::new(format!("TTS_CONFIG_VOICEVOX_PAGE_{}", current_page - 1))
@@ -114,7 +93,6 @@ async fn show_voicevox_page(
         );
     }
 
-    // Page indicator (disabled button showing current page)
     pagination_buttons.push(
         CreateButton::new("TTS_CONFIG_VOICEVOX_PAGE_INDICATOR")
             .label(format!("Page {}/{}", current_page + 1, total_pages))
@@ -122,7 +100,6 @@ async fn show_voicevox_page(
             .disabled(true),
     );
 
-    // Next page button
     if current_page < total_pages - 1 {
         pagination_buttons.push(
             CreateButton::new(format!("TTS_CONFIG_VOICEVOX_PAGE_{}", current_page + 1))
@@ -132,18 +109,15 @@ async fn show_voicevox_page(
     }
 
     if pagination_buttons.len() > 1 {
-        // Only add pagination row if there are actual navigation buttons
-        components.push(CreateActionRow::Buttons(pagination_buttons));
+        components.push(CreateComponent::ActionRow(CreateActionRow::Buttons(pagination_buttons.into())));
     }
 
-    // Back to main config button
-    components.push(CreateActionRow::Buttons(vec![CreateButton::new(
+    components.push(CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(
         TTS_CONFIG_BACK_TO_MAIN,
     )
     .label("設定に戻る")
-    .style(ButtonStyle::Secondary)]));
+    .style(ButtonStyle::Secondary)].into())));
 
-    // Update the interaction message
     interaction
         .create_response(
             &ctx.http,

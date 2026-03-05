@@ -9,15 +9,19 @@ pub trait ReadName {
 
 impl ReadName for Member {
     fn read_name(&self) -> String {
-        self.nick.clone().unwrap_or(self.display_name().to_string())
+        self.nick
+            .as_ref()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| self.display_name().to_string())
     }
 }
 
 impl ReadName for PartialMember {
     fn read_name(&self) -> String {
         self.nick
-            .clone()
-            .unwrap_or(self.user.as_ref().unwrap().display_name().to_string())
+            .as_ref()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| self.user.as_ref().unwrap().display_name().to_string())
     }
 }
 

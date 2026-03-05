@@ -6,14 +6,12 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{error, info, instrument, warn};
 
-use crate::data::{DatabaseClientData, TTSData};
+use crate::data::UserData;
 
-/// Constants for connection monitoring
 const CONNECTION_CHECK_INTERVAL_SECS: u64 = 5;
 const MAX_RECONNECTION_ATTEMPTS: u32 = 3;
 const RECONNECTION_BACKOFF_SECS: u64 = 2;
 
-/// Errors that can occur during connection monitoring
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectionMonitorError {
     #[error("Failed to get songbird manager")]
@@ -28,7 +26,6 @@ pub enum ConnectionMonitorError {
 
 type Result<T> = std::result::Result<T, ConnectionMonitorError>;
 
-/// Connection monitor that periodically checks voice channel connections
 pub struct ConnectionMonitor {
     reconnection_attempts: std::collections::HashMap<serenity::model::id::GuildId, u32>,
 }
@@ -46,7 +43,6 @@ impl ConnectionMonitor {
         }
     }
 
-    /// Start the connection monitoring task
     pub fn start(ctx: Context) {
         tokio::spawn(async move {
             let mut monitor = ConnectionMonitor::new();
@@ -65,40 +61,17 @@ impl ConnectionMonitor {
         });
     }
 
-    /// Check all active TTS instances and their voice channel connections
     #[instrument(skip(self, ctx))]
     async fn check_connections(&mut self, ctx: &Context) -> Result<()> {
-        let storage_lock = {
-            let data_read = ctx.data.read().await;
-            data_read
-                .get::<TTSData>()
-                .ok_or_else(|| {
-                    ConnectionMonitorError::VoiceChannelCheck("Cannot get TTSStorage".to_string())
-                })?
-                .clone()
-        };
-
-        let database = {
-            let data_read = ctx.data.read().await;
-            data_read
-                .get::<DatabaseClientData>()
-                .ok_or_else(|| {
-                    ConnectionMonitorError::VoiceChannelCheck(
-                        "Cannot get DatabaseClientData".to_string(),
-                    )
-                })?
-                .clone()
-        };
+        let data = ctx.data::<UserData>();
+        let storage_lock = data.tts_data.clone();
+        let database = data.database.clone();
+        let manager = data.songbird.clone();
 
         let mut storage = storage_lock.write().await;
         let mut guilds_to_remove = Vec::new();
 
         for (guild_id, instance) in storage.iter() {
-            // Check if bot is still connected to voice channel
-            let manager = songbird::get(ctx)
-                .await
-                .ok_or(ConnectionMonitorError::SongbirdManagerNotFound)?;
-
             let call = manager.get(*guild_id);
             let is_connected = if let Some(call) = call {
                 if let Some(connection) = call.lock().await.current_connection() {
@@ -113,7 +86,6 @@ impl ConnectionMonitor {
             if !is_connected {
                 warn!(guild_id = %guild_id, "Bot disconnected from voice channel");
 
-                // Check if there are users in the voice channel
                 let should_reconnect = match self.check_voice_channel_users(ctx, instance).await {
                     Ok(has_users) => has_users,
                     Err(e) => {
@@ -123,7 +95,6 @@ impl ConnectionMonitor {
                 };
 
                 if should_reconnect {
-                    // Try to reconnect with retry logic
                     let attempts = self
                         .reconnection_attempts
                         .get(guild_id)
@@ -141,7 +112,6 @@ impl ConnectionMonitor {
                         continue;
                     }
 
-                    // Apply exponential backoff
                     if attempts > 0 {
                         let backoff_duration =
                             Duration::from_secs(RECONNECTION_BACKOFF_SECS * (2_u64.pow(attempts)));
@@ -162,19 +132,17 @@ impl ConnectionMonitor {
                                 "Successfully reconnected to voice channel"
                             );
 
-                            // Reset reconnection attempts on success
                             self.reconnection_attempts.remove(guild_id);
 
-                            // Send notification message to text channel with embed
                             let embed = CreateEmbed::new()
                                 .title("🔄 自動再接続しました")
                                 .description("読み上げを停止したい場合は `/stop` コマンドを使用してください。")
                                 .color(0x00ff00);
 
-                            // Send message to the first text channel
                             if let Some(&text_channel) = instance.text_channels.first() {
+                                let msg = CreateMessage::new().embed(embed);
                                 if let Err(e) = text_channel
-                                    .send_message(&ctx.http, CreateMessage::new().embed(embed))
+                                    .widen().send_message(&ctx.http, msg)
                                     .await
                                 {
                                     error!(guild_id = %guild_id, error = %e, "Failed to send reconnection message");
@@ -208,20 +176,15 @@ impl ConnectionMonitor {
             }
         }
 
-        // Remove disconnected instances
         for guild_id in guilds_to_remove {
             storage.remove(&guild_id);
 
-            // Remove from database
             if let Err(e) = database.remove_tts_instance(guild_id).await {
                 error!(guild_id = %guild_id, error = %e, "Failed to remove TTS instance from database");
             }
 
-            // Ensure bot leaves voice channel
-            if let Some(manager) = songbird::get(ctx).await {
-                if let Err(e) = manager.remove(guild_id).await {
-                    error!(guild_id = %guild_id, error = %e, "Failed to remove bot from voice channel");
-                }
+            if let Err(e) = manager.remove(guild_id).await {
+                error!(guild_id = %guild_id, error = %e, "Failed to remove bot from voice channel");
             }
 
             info!(guild_id = %guild_id, "Removed disconnected TTS instance");
@@ -230,7 +193,6 @@ impl ConnectionMonitor {
         Ok(())
     }
 
-    /// Check if there are users in the voice channel
     #[instrument(skip(self, ctx, instance))]
     async fn check_voice_channel_users(
         &self,
@@ -251,7 +213,7 @@ impl ConnectionMonitor {
                     e
                 ))
             })?;
-            let user_count = members.iter().filter(|member| !member.user.bot).count();
+            let user_count = members.iter().filter(|member| !member.user.bot()).count();
 
             info!(
                 guild_id = %instance.guild,

@@ -5,9 +5,9 @@
 use crate::{errors::{NCBError, Result}, interactions::utils};
 use serenity::{
     all::{
-        ChannelType, ComponentInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,
-        CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
-        CreateSelectMenuOption, ButtonStyle,
+        ButtonStyle, ChannelType, ComponentInteraction, CreateActionRow, CreateButton,
+        CreateComponent, CreateInteractionResponse, CreateInteractionResponseMessage,
+        CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption,
     },
     prelude::Context,
 };
@@ -38,16 +38,17 @@ pub async fn handle_show_autostart_menu(
         .default_selection(autostart_channel_id == 0);
     voice_options.push(clear_option);
 
-    for (id, channel) in channels.clone() {
-        if channel.kind != ChannelType::Voice {
+    for channel in channels.clone() {
+        if channel.base.kind != ChannelType::Voice {
             continue;
         }
         let description = channel
             .topic
-            .unwrap_or_else(|| String::from("No topic provided."));
+            .map(|t| t.into_string())
+            .unwrap_or_else(|| "No topic provided.".to_string());
         let option = CreateSelectMenuOption::new(
-            &channel.name,
-            format!("SET_AUTOSTART_CHANNEL_{}", id.get()),
+            channel.base.name.to_string(),
+            format!("SET_AUTOSTART_CHANNEL_{}", channel.id.get()),
         )
         .description(description)
         .default_selection(channel.id.get() == autostart_channel_id);
@@ -62,16 +63,17 @@ pub async fn handle_show_autostart_menu(
             .default_selection(config.autostart_text_channel_id.is_none());
     text_options.push(clear_option);
 
-    for (id, channel) in channels {
-        if channel.kind != ChannelType::Text {
+    for channel in channels {
+        if channel.base.kind != ChannelType::Text {
             continue;
         }
         let description = channel
             .topic
-            .unwrap_or_else(|| String::from("No topic provided."));
+            .map(|t| t.into_string())
+            .unwrap_or_else(|| "No topic provided.".to_string());
         let option = CreateSelectMenuOption::new(
-            &channel.name,
-            format!("SET_AUTOSTART_TEXT_CHANNEL_{}", id.get()),
+            channel.base.name.to_string(),
+            format!("SET_AUTOSTART_TEXT_CHANNEL_{}", channel.id.get()),
         )
         .description(description)
         .default_selection(
@@ -87,31 +89,31 @@ pub async fn handle_show_autostart_menu(
                 CreateInteractionResponseMessage::new()
                     .content("自動参加チャンネル設定")
                     .components(vec![
-                        CreateActionRow::SelectMenu(
+                        CreateComponent::ActionRow(CreateActionRow::SelectMenu(
                             CreateSelectMenu::new(
                                 "SET_AUTOSTART_CHANNEL",
                                 CreateSelectMenuKind::String {
-                                    options: voice_options,
+                                    options: voice_options.into(),
                                 },
                             )
                             .min_values(0)
                             .max_values(1),
-                        ),
-                        CreateActionRow::SelectMenu(
+                        )),
+                        CreateComponent::ActionRow(CreateActionRow::SelectMenu(
                             CreateSelectMenu::new(
                                 "SET_AUTOSTART_TEXT_CHANNEL",
                                 CreateSelectMenuKind::String {
-                                    options: text_options,
+                                    options: text_options.into(),
                                 },
                             )
                             .min_values(0)
                             .max_values(1),
-                        ),
-                        CreateActionRow::Buttons(vec![CreateButton::new(
+                        )),
+                        CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(
                             "TTS_CONFIG_SERVER_BACK",
                         )
                         .label("← サーバー設定に戻る")
-                        .style(ButtonStyle::Secondary)]),
+                        .style(ButtonStyle::Secondary)].into())),
                     ]),
             ),
         )

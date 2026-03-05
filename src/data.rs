@@ -1,29 +1,15 @@
 use crate::{database::database::Database, tts::tts::TTS};
 use serenity::{
     model::id::GuildId,
-    prelude::{RwLock, TypeMapKey},
+    prelude::RwLock,
 };
 
 use crate::tts::instance::TTSInstance;
 use std::{collections::HashMap, sync::Arc};
 
-/// TTSInstance data
-pub struct TTSData;
-
-impl TypeMapKey for TTSData {
-    type Value = Arc<RwLock<HashMap<GuildId, TTSInstance>>>;
-}
-
-/// TTS client data
-pub struct TTSClientData;
-
-impl TypeMapKey for TTSClientData {
-    type Value = Arc<TTS>;
-}
-
-/// Database client data
-pub struct DatabaseClientData;
-
-impl TypeMapKey for DatabaseClientData {
-    type Value = Arc<Database>;
+pub struct UserData {
+    pub songbird: Arc<songbird::Songbird>,
+    pub tts_data: Arc<RwLock<HashMap<GuildId, TTSInstance>>>,
+    pub tts_client: Arc<TTS>,
+    pub database: Arc<Database>,
 }

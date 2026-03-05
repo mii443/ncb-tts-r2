@@ -1,33 +1,20 @@
-//! Utility functions for interaction handlers
-//!
-//! This module provides shared utilities used across all interaction handlers:
-//! - Database access helpers
-//! - Response helpers
-//! - Component builders
-//! - Validation helpers
-
 use crate::{
-    data::DatabaseClientData,
+    data::UserData,
     database::{database::Database, server_config::ServerConfig, user_config::UserConfig},
     errors::{NCBError, Result},
 };
 use serenity::{
     all::{
-        ActionRow, ActionRowComponent, ButtonStyle, ComponentInteraction,
-        CreateActionRow, CreateButton, CreateInteractionResponse,
-        CreateInteractionResponseMessage,
+        ButtonStyle, ComponentInteraction, CreateActionRow, CreateButton, CreateComponent,
+        CreateInteractionResponse, CreateInteractionResponseMessage, LabelComponent,
+        ModalComponent,
     },
     prelude::Context,
 };
 use std::sync::Arc;
 
-/// Database helpers
 pub async fn get_database_client(ctx: &Context) -> Result<Arc<Database>> {
-    let data_read = ctx.data.read().await;
-    data_read
-        .get::<DatabaseClientData>()
-        .cloned()
-        .ok_or_else(|| NCBError::config("Cannot get DatabaseClientData"))
+    Ok(ctx.data::<UserData>().database.clone())
 }
 
 pub async fn get_server_config(ctx: &Context, guild_id: u64) -> Result<ServerConfig> {
@@ -62,17 +49,17 @@ pub async fn set_user_config(ctx: &Context, user_id: u64, config: UserConfig) ->
     Ok(())
 }
 
-/// Response helpers
 pub async fn update_interaction_message(
     ctx: &Context,
     interaction: &ComponentInteraction,
     content: impl Into<String>,
 ) -> Result<()> {
+    let content_string: String = content.into();
     interaction
         .create_response(
             &ctx.http,
             CreateInteractionResponse::UpdateMessage(
-                CreateInteractionResponseMessage::new().content(content),
+                CreateInteractionResponseMessage::new().content(content_string),
             ),
         )
         .await
@@ -80,11 +67,10 @@ pub async fn update_interaction_message(
     Ok(())
 }
 
-/// Component builders (reusable UI components)
-pub fn build_server_config_buttons() -> Vec<CreateActionRow> {
+pub fn build_server_config_buttons() -> Vec<CreateComponent<'static>> {
     use crate::errors::constants::*;
 
-    vec![CreateActionRow::Buttons(vec![
+    vec![CreateComponent::ActionRow(CreateActionRow::Buttons(vec![
         CreateButton::new(TTS_CONFIG_SERVER_DICTIONARY)
             .label("辞書管理")
             .style(ButtonStyle::Primary),
@@ -97,14 +83,14 @@ pub fn build_server_config_buttons() -> Vec<CreateActionRow> {
         CreateButton::new(TTS_CONFIG_SERVER_SET_READ_USERNAME)
             .label("ユーザー名読み上げ切り替え")
             .style(ButtonStyle::Primary),
-    ])]
+    ].into()))]
 }
 
-pub fn build_dictionary_menu_buttons() -> Vec<CreateActionRow> {
+pub fn build_dictionary_menu_buttons() -> Vec<CreateComponent<'static>> {
     use crate::errors::constants::*;
 
     vec![
-        CreateActionRow::Buttons(vec![
+        CreateComponent::ActionRow(CreateActionRow::Buttons(vec![
             CreateButton::new(TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON)
                 .label("辞書を追加")
                 .style(ButtonStyle::Primary),
@@ -114,22 +100,21 @@ pub fn build_dictionary_menu_buttons() -> Vec<CreateActionRow> {
             CreateButton::new(TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON)
                 .label("辞書一覧")
                 .style(ButtonStyle::Primary),
-        ]),
-        CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
+        ].into())),
+        CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
             .label("← サーバー設定に戻る")
-            .style(ButtonStyle::Secondary)]),
+            .style(ButtonStyle::Secondary)].into())),
     ]
 }
 
-pub fn build_back_button() -> CreateActionRow {
+pub fn build_back_button() -> CreateComponent<'static> {
     use crate::errors::constants::TTS_CONFIG_SERVER_BACK;
 
-    CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
+    CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
         .label("← サーバー設定に戻る")
-        .style(ButtonStyle::Secondary)])
+        .style(ButtonStyle::Secondary)].into()))
 }
 
-/// Validation helpers
 pub fn extract_guild_id(interaction: &ComponentInteraction) -> Result<u64> {
     interaction
         .guild_id
@@ -137,13 +122,12 @@ pub fn extract_guild_id(interaction: &ComponentInteraction) -> Result<u64> {
         .map(|id| id.get())
 }
 
-/// Select menu parsing
 pub fn parse_select_value(interaction: &ComponentInteraction, prefix: &str) -> Result<u64> {
     use serenity::all::ComponentInteractionDataKind;
 
     if let ComponentInteractionDataKind::StringSelect { ref values, .. } = interaction.data.kind {
         if values.is_empty() {
-            return Ok(0); // Treat as clear
+            return Ok(0);
         }
 
         if values[0].ends_with("_CLEAR") {
@@ -164,26 +148,24 @@ pub fn parse_select_value(interaction: &ComponentInteraction, prefix: &str) -> R
     }
 }
 
-/// Modal extraction helper
 pub fn extract_input_text(
-    components: &[ActionRow],
+    components: &[ModalComponent],
     row_index: usize,
-    component_index: usize,
+    _component_index: usize,
 ) -> Option<String> {
-    components
-        .get(row_index)?
-        .components
-        .get(component_index)
-        .and_then(|component| {
-            if let ActionRowComponent::InputText(text) = component {
-                text.value.clone()
+    let component = components.get(row_index)?;
+    match component {
+        ModalComponent::Label(label) => {
+            if let LabelComponent::InputText(text) = &label.component {
+                text.value.as_ref().map(|v| v.to_string())
             } else {
                 None
             }
-        })
+        }
+        _ => None,
+    }
 }
 
-/// Select value index parsing (for removing items from lists)
 pub fn parse_select_index(interaction: &ComponentInteraction) -> Result<usize> {
     use serenity::all::ComponentInteractionDataKind;
 

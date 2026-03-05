@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serenity::prelude::Context;
 use songbird::tracks::Track;
 
-use crate::{data::TTSClientData, tts::instance::TTSInstance};
+use crate::{data::UserData, tts::instance::TTSInstance};
 
 use super::gcp_tts::structs::{
     audio_config::AudioConfig, synthesis_input::SynthesisInput,
@@ -12,20 +12,7 @@ use super::gcp_tts::structs::{
 /// Message trait that can be used to synthesize text to speech.
 #[async_trait]
 pub trait TTSMessage {
-    /// Parse the message for synthesis.
-    ///
-    /// Example:
-    /// ```rust
-    /// let text = message.parse(instance, ctx).await;
-    /// ```
     async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String;
-
-    /// Synthesize the message and returns the audio data.
-    ///
-    /// Example:
-    /// ```rust
-    /// let audio = message.synthesize(instance, ctx).await;
-    /// ```
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track>;
 }
 
@@ -46,10 +33,8 @@ impl TTSMessage for AnnounceMessage {
 
     async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
         let text = self.parse(instance, ctx).await;
-        let data_read = ctx.data.read().await;
-        let tts = data_read
-            .get::<TTSClientData>()
-            .expect("Cannot get TTSClientStorage");
+        let data = ctx.data::<UserData>();
+        let tts = &data.tts_client;
 
         let audio = tts
             .synthesize_gcp(SynthesizeRequest {

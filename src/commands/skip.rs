@@ -6,7 +6,7 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::data::TTSData;
+use crate::data::UserData;
 
 pub async fn skip_command(
     ctx: &Context,
@@ -44,13 +44,7 @@ pub async fn skip_command(
         return Ok(());
     }
 
-    let storage_lock = {
-        let data_read = ctx.data.read().await;
-        data_read
-            .get::<TTSData>()
-            .expect("Cannot get TTSStorage")
-            .clone()
-    };
+    let storage_lock = ctx.data::<UserData>().tts_data.clone();
 
     {
         let mut storage = storage_lock.write().await;

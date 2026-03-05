@@ -1,12 +1,13 @@
 use serenity::{
     all::{
         CommandInteraction, CreateInteractionResponse, CreateInteractionResponseMessage, EditThread,
+        ThreadId,
     },
     model::prelude::UserId,
     prelude::Context,
 };
 
-use crate::data::{DatabaseClientData, TTSData};
+use crate::data::UserData;
 
 pub async fn stop_command(
     ctx: &Context,
@@ -48,18 +49,9 @@ pub async fn stop_command(
         return Ok(());
     }
 
-    let manager = songbird::get(ctx)
-        .await
-        .expect("Cannot get songbird client.")
-        .clone();
-
-    let storage_lock = {
-        let data_read = ctx.data.read().await;
-        data_read
-            .get::<TTSData>()
-            .expect("Cannot get TTSStorage")
-            .clone()
-    };
+    let data = ctx.data::<UserData>();
+    let manager = data.songbird.clone();
+    let storage_lock = data.tts_data.clone();
 
     let text_channel_id = {
         let mut storage = storage_lock.write().await;
@@ -81,15 +73,7 @@ pub async fn stop_command(
         let text_channel_id = storage.get(&guild.id).unwrap().text_channels[0];
         storage.remove(&guild.id);
 
-        // Remove from database
-        let data_read = ctx.data.read().await;
-        let database = data_read
-            .get::<DatabaseClientData>()
-            .expect("Cannot get DatabaseClientData")
-            .clone();
-        drop(data_read);
-
-        if let Err(e) = database.remove_tts_instance(guild.id).await {
+        if let Err(e) = data.database.remove_tts_instance(guild.id).await {
             tracing::error!("Failed to remove TTS instance from database: {}", e);
         }
 
@@ -107,8 +91,9 @@ pub async fn stop_command(
         )
         .await?;
 
-    let _ = text_channel_id
-        .edit_thread(&ctx.http, EditThread::new().archived(true))
+    let _ = EditThread::new()
+        .archived(true)
+        .execute(&ctx.http, ThreadId::new(text_channel_id.get()))
         .await;
 
     Ok(())

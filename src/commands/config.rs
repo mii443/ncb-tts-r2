@@ -1,32 +1,26 @@
 use serenity::{
     all::{
-        ButtonStyle, CommandInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,
-        CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
-        CreateSelectMenuOption,
+        ButtonStyle, CommandInteraction, CreateActionRow, CreateButton, CreateComponent,
+        CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu,
+        CreateSelectMenuKind, CreateSelectMenuOption,
     },
     prelude::Context,
 };
 
-use crate::{data::DatabaseClientData, tts::tts_type::TTSType};
+use crate::{data::UserData, tts::tts_type::TTSType};
 
-#[tracing::instrument]
+#[tracing::instrument(skip_all)]
 pub async fn config_command(
     ctx: &Context,
     command: &CommandInteraction,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let data_read = ctx.data.read().await;
+    let data = ctx.data::<UserData>();
 
-    let config = {
-        let database = data_read
-            .get::<DatabaseClientData>()
-            .expect("Cannot get DatabaseClientData")
-            .clone();
-        database
-            .get_user_config_or_default(command.user.id.get())
-            .await
-            .unwrap()
-            .unwrap()
-    };
+    let config = data.database
+        .get_user_config_or_default(command.user.id.get())
+        .await
+        .unwrap()
+        .unwrap();
 
     let tts_type = config.tts_type.unwrap_or(TTSType::GCP);
 
@@ -41,7 +35,7 @@ pub async fn config_command(
                         .default_selection(tts_type == TTSType::VOICEVOX),
                     CreateSelectMenuOption::new("Toriel", "TTS_CONFIG_ENGINE_SELECTED_TORIEL")
                         .default_selection(tts_type == TTSType::TORIEL),
-                ],
+                ].into(),
             },
         )
         .placeholder("読み上げAPIを選択"),
@@ -49,15 +43,18 @@ pub async fn config_command(
 
     let voicevox_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_VOICEVOX")
         .label("VOICEVOX設定")
-        .style(ButtonStyle::Primary)]);
+        .style(ButtonStyle::Primary)].into());
 
-    let mut components = vec![engine_select, voicevox_button];
+    let mut components: Vec<CreateComponent> = vec![
+        CreateComponent::ActionRow(engine_select),
+        CreateComponent::ActionRow(voicevox_button),
+    ];
 
     let server_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_SERVER")
         .label("サーバー設定")
-        .style(ButtonStyle::Primary)]);
+        .style(ButtonStyle::Primary)].into());
 
-    components.push(server_button);
+    components.push(CreateComponent::ActionRow(server_button));
 
     command
         .create_response(

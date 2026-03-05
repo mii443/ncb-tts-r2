@@ -16,48 +16,23 @@ mod utils;
 use std::{collections::HashMap, env, sync::Arc};
 
 use config::Config;
-use data::{DatabaseClientData, TTSClientData, TTSData};
+use data::UserData;
 use database::database::Database;
 use errors::{NCBError, Result};
 use event_handler::Handler;
-#[allow(deprecated)]
-use serenity::{
-    all::{standard::Configuration, ApplicationId},
-    client::Client,
-    framework::StandardFramework,
-    prelude::{GatewayIntents, RwLock},
-};
+use serenity::prelude::{Client, GatewayIntents, RwLock, Token};
 use trace::init_tracing_subscriber;
 use tracing::info;
 use tts::{
     gcp_tts::gcp_tts::GCPTTS, toriel::toriel::TorielTTS, tts::TTS, voicevox::voicevox::VOICEVOX,
 };
 
-use songbird::SerenityInit;
-
-/// Create discord client
-///
-/// Example:
-/// ```rust
-/// let client = create_client("!", "BOT_TOKEN", 123456789123456789).await;
-///
-/// client.start().await;
-/// ```
-#[allow(deprecated)]
-async fn create_client(prefix: &str, token: &str, id: u64) -> Result<Client> {
-    let framework = StandardFramework::new();
-    framework.configure(Configuration::new().with_whitespace(true).prefix(prefix));
-
-    Ok(Client::builder(token, GatewayIntents::all())
-        .event_handler(Handler)
-        .application_id(ApplicationId::new(id))
-        .framework(framework)
-        .register_songbird()
-        .await?)
-}
-
 #[tokio::main]
 async fn main() {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls CryptoProvider");
+
     if let Err(e) = run().await {
         eprintln!("Application error: {}", e);
         std::process::exit(1);
@@ -65,49 +40,43 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
-    // Load config
     let config = load_config()?;
-
     let _guard = init_tracing_subscriber(&config.otel_http_url);
 
-    // Create discord client
-    let mut client = create_client(&config.prefix, &config.token, config.application_id).await?;
+    let manager = songbird::Songbird::serenity();
 
-    // Create GCP TTS client
     let tts = GCPTTS::new("./credentials.json".to_string())
         .await
         .map_err(|e| NCBError::GCPAuth(e))?;
-
     let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url);
-
     let toriel = TorielTTS::new();
-
     let database_client = Database::new_with_url(config.redis_url).await?;
 
-    // Create TTS storage
-    {
-        let mut data = client.data.write().await;
-        data.insert::<TTSData>(Arc::new(RwLock::new(HashMap::default())));
-        data.insert::<TTSClientData>(Arc::new(TTS::new(voicevox, tts, toriel)));
-        data.insert::<DatabaseClientData>(Arc::new(database_client.clone()));
-    }
+    let user_data = UserData {
+        songbird: Arc::clone(&manager),
+        tts_data: Arc::new(RwLock::new(HashMap::default())),
+        tts_client: Arc::new(TTS::new(voicevox, tts, toriel)),
+        database: Arc::new(database_client),
+    };
+
+    let token: Token = config.token.parse().map_err(|_| NCBError::config("Invalid Discord token"))?;
+
+    let mut client = Client::builder(token, GatewayIntents::all())
+        .event_handler(Arc::new(Handler))
+        .voice_manager(manager)
+        .data(Arc::new(user_data) as _)
+        .await?;
 
     info!("Bot initialized.");
-
-    // Run client
     client.start().await?;
-
     Ok(())
 }
 
-/// Load configuration from file or environment variables
 fn load_config() -> Result<Config> {
-    // Try to load from config file first
     if let Ok(config_str) = std::fs::read_to_string("./config.toml") {
         return toml::from_str::<Config>(&config_str).map_err(|e| NCBError::Toml(e));
     }
 
-    // Fall back to environment variables
     let token = env::var("NCB_TOKEN").map_err(|_| NCBError::missing_env_var("NCB_TOKEN"))?;
     let application_id_str =
         env::var("NCB_APP_ID").map_err(|_| NCBError::missing_env_var("NCB_APP_ID"))?;
