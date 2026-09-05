@@ -21,3 +21,6 @@ pub use tts::tts_type::TTSType;
 pub use utils::{
     get_cached_regex, retry_with_backoff, CircuitBreaker, CircuitBreakerState, PerformanceMetrics,
 };
+
+#[cfg(feature = "transcription")]
+pub mod transcription;

@@ -8,7 +8,8 @@ use serenity::{
 #[tracing::instrument(skip_all)]
 pub async fn ready(ctx: &Context, ready: &Ready) {
     tracing::info!("{} is connected!", ready.user.name);
-    let commands = vec![
+    #[allow(unused_mut)]
+    let mut commands = vec![
         CreateCommand::new("stop").description("Stop tts"),
         CreateCommand::new("setup")
             .description("Setup tts")
@@ -24,6 +25,12 @@ pub async fn ready(ctx: &Context, ready: &Ready) {
         CreateCommand::new("config").description("Config"),
         CreateCommand::new("skip").description("skip tts message"),
     ];
+    #[cfg(feature = "transcription")]
+    if let Some(service) = &ctx.data::<crate::data::UserData>().transcription {
+        commands.push(crate::transcription::bot::transcribe_command(
+            service.web_base_url.is_some(),
+        ));
+    }
     if let Err(error) = Command::set_global_commands(&ctx.http, &commands).await {
         tracing::error!(error = %error, "Failed to register commands");
     }

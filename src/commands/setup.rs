@@ -28,6 +28,8 @@ pub async fn setup_command(ctx: &Context, command: &CommandInteraction) -> Resul
     command.defer(&ctx.http).await?;
     let data = ctx.data::<UserData>();
     let setup_guard = data.setup_guard(guild_id).await;
+    #[cfg(feature = "transcription")]
+    crate::transcription::ensure_channel(&data, guild_id, channel_id)?;
     if get_session(ctx, guild_id).await.is_some() {
         command
             .edit_response(

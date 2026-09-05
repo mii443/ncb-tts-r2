@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>NCB ライブ文字起こし</title>
+    <link rel="stylesheet" href="/assets/dashboard.css">
+    <script src="/assets/dashboard.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <h1>ライブ文字起こし</h1>
+        <div id="status" class="status connecting" role="status" aria-live="polite"><span></span>接続中</div>
+      </header>
+      <main>
+        <section id="empty" class="empty">
+          <p>音声を待っています</p>
+          <small>この画面は対象のボイスチャンネルに参加している間だけ更新されます。</small>
+        </section>
+        <section id="transcripts" class="transcripts" aria-live="polite"></section>
+      </main>
+    </div>
+  </body>
+</html>

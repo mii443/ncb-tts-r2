@@ -69,6 +69,14 @@ impl TTSSession {
         if self.is_stopped() {
             return Err(NCBError::SessionStopped);
         }
+        let data = ctx.data::<UserData>();
+        let _setup_guard = data.setup_guard(self.instance.guild).await;
+        #[cfg(feature = "transcription")]
+        crate::transcription::ensure_channel(
+            &data,
+            self.instance.guild,
+            self.instance.voice_channel,
+        )?;
         let cancel = self.queue.cancellation();
         let result = tokio::select! {
             biased;
@@ -101,7 +109,15 @@ impl TTSSession {
         {
             return Ok(());
         }
-        if data.songbird.get(self.instance.guild).is_some() {
+        #[cfg(feature = "transcription")]
+        let keep_voice = data
+            .transcription
+            .as_ref()
+            .and_then(|t| t.voice_channel(self.instance.guild))
+            .is_some();
+        #[cfg(not(feature = "transcription"))]
+        let keep_voice = false;
+        if !keep_voice && data.songbird.get(self.instance.guild).is_some() {
             tokio::time::timeout(
                 Duration::from_secs(10),
                 data.songbird.remove(self.instance.guild),

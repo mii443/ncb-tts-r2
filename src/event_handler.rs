@@ -30,6 +30,10 @@ impl EventHandler for Handler {
                 }
             }
             FullEvent::VoiceStateUpdate { old, new } => {
+                #[cfg(feature = "transcription")]
+                if let Some(service) = &ctx.data::<crate::data::UserData>().transcription {
+                    service.voice_state_update(ctx, new).await;
+                }
                 events::voice_state_update::voice_state_update(ctx, old.clone(), new.clone()).await;
             }
             _ => {}

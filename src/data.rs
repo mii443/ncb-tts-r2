@@ -9,6 +9,8 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 pub struct UserData {
+    #[cfg(feature = "transcription")]
+    pub transcription: Option<Arc<crate::transcription::Transcription>>,
     pub songbird: Arc<songbird::Songbird>,
     pub tts_data: Arc<RwLock<HashMap<GuildId, Arc<TTSSession>>>>,
     pub tts_client: Arc<TTS>,

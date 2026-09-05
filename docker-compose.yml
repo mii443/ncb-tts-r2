@@ -3,13 +3,25 @@ version: '3'
 services:
   ncb-tts-r2:
     container_name: ncb-tts-r2
-    image: ghcr.io/mii443/ncb-tts-r2:1.13.1
+    image: ghcr.io/mii443/ncb-tts-r2:1.16.0
     environment:
     - NCB_TOKEN=YOUR_BOT_TOKEN
     - NCB_APP_ID=YOUR_BOT_ID
     - NCB_PREFIX=BOT_PREFIX
     - NCB_REDIS_URL=redis://redis:6379/
     - NCB_VOICEVOX_ORIGINAL_API_URL=http://voicevox_engine:50021
+    - NCB_TRANSCRIPTION_ENABLED=${NCB_TRANSCRIPTION_ENABLED:-true}
+    - NCB_WEB_ENABLED=${NCB_WEB_ENABLED:-true}
+    - HAYAMIMI_URL=${HAYAMIMI_URL:-ws://host.docker.internal:8766/ingest/v2}
+    - HAYAMIMI_BRIDGE_SECRET=${HAYAMIMI_BRIDGE_SECRET:-}
+    - NCB_WEB_BASE_URL=${NCB_WEB_BASE_URL:-}
+    - NCB_WEB_BIND=0.0.0.0:8080
+    - NCB_WEB_CLIENT_ID=${NCB_WEB_CLIENT_ID:-}
+    - NCB_WEB_CLIENT_SECRET=${NCB_WEB_CLIENT_SECRET:-}
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    ports:
+    - "127.0.0.1:8080:8080"
     volumes:
     - ./credentials.json:/ncb-tts-r2/credentials.json:ro
   redis:

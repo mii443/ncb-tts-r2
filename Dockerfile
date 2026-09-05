@@ -8,6 +8,8 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
+# Empty string builds TTS only; transcription omits the Web UI.
+ARG CARGO_FEATURES="transcription,web-ui"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libssl-dev \
@@ -22,11 +24,11 @@ COPY --from=planner /app/recipe.json recipe.json
 # Warm both production and test feature sets before copying application sources.
 # Tests enable dev-dependencies (e.g. tokio/test-util), rebuilding their consumers
 # unless that second dependency graph is also part of the cached recipe layer.
-RUN cargo chef cook --release --locked --recipe-path recipe.json && \
-    cargo chef cook --release --locked --all-targets --recipe-path recipe.json
+RUN cargo chef cook --release --locked --no-default-features --features "$CARGO_FEATURES" --recipe-path recipe.json && \
+    cargo chef cook --release --locked --no-default-features --features "$CARGO_FEATURES" --all-targets --recipe-path recipe.json
 COPY . .
-RUN cargo test --release --locked --all-targets
-RUN cargo build --release --locked
+RUN cargo test --release --locked --no-default-features --features "$CARGO_FEATURES" --all-targets
+RUN cargo build --release --locked --no-default-features --features "$CARGO_FEATURES"
 
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS runtime
 WORKDIR /ncb-tts-r2

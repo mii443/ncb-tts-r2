@@ -49,6 +49,10 @@ pub async fn voice_state_update(ctx: &Context, old: Option<VoiceState>, new: Voi
             return;
         }
         let setup_guard = data.setup_guard(guild_id).await;
+        #[cfg(feature = "transcription")]
+        if crate::transcription::ensure_channel(&data, guild_id, channel).is_err() {
+            return;
+        }
         if get_session(ctx, guild_id).await.is_some() {
             return;
         }

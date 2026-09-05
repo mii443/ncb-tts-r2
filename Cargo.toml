@@ -1,6 +1,6 @@
 [package]
 name = "ncb-tts-r2"
-version = "1.11.2"
+version = "1.16.0"
 edition = "2021"
 
 [lib]
@@ -13,7 +13,16 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["transcription", "web-ui"]
+transcription = ["songbird/receive", "dep:tokio-tungstenite"]
+web-ui = ["transcription", "dep:axum", "dep:hmac", "dep:sha2"]
+
 [dependencies]
+axum = { version = "0.8", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
 serde_json = "1.0"
 serde = "1.0"
 toml = "0.8.19"
@@ -76,7 +85,7 @@ features = [
 
 [dependencies.tokio]
 version = "1.0"
-features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"]
+features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "signal"]
 
 [patch."https://github.com/serenity-rs/serenity".serenity]
 git = "https://github.com/GnomedDev/serenity"

@@ -96,6 +96,10 @@ impl ConnectionMonitor {
     }
 
     async fn check_connections(&mut self, ctx: &Context) {
+        #[cfg(feature = "transcription")]
+        if let Some(service) = &ctx.data::<UserData>().transcription {
+            service.maintain(ctx).await;
+        }
         if !self.restored {
             if let Err(error) = self.restore(ctx).await {
                 tracing::warn!(error = %error, "Cannot restore sessions yet; saved state is retained");
