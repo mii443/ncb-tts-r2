@@ -25,11 +25,7 @@ pub async fn get_server_config(ctx: &Context, guild_id: u64) -> Result<ServerCon
         .ok_or_else(|| NCBError::config("Server config not found"))
 }
 
-pub async fn set_server_config(
-    ctx: &Context,
-    guild_id: u64,
-    config: ServerConfig,
-) -> Result<()> {
+pub async fn set_server_config(ctx: &Context, guild_id: u64, config: ServerConfig) -> Result<()> {
     let database = get_database_client(ctx).await?;
     database.set_server_config(guild_id, config).await?;
     Ok(())
@@ -70,49 +66,61 @@ pub async fn update_interaction_message(
 pub fn build_server_config_buttons() -> Vec<CreateComponent<'static>> {
     use crate::errors::constants::*;
 
-    vec![CreateComponent::ActionRow(CreateActionRow::Buttons(vec![
-        CreateButton::new(TTS_CONFIG_SERVER_DICTIONARY)
-            .label("辞書管理")
-            .style(ButtonStyle::Primary),
-        CreateButton::new(TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL)
-            .label("自動参加チャンネル")
-            .style(ButtonStyle::Primary),
-        CreateButton::new(TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE)
-            .label("入退出アナウンス通知切り替え")
-            .style(ButtonStyle::Primary),
-        CreateButton::new(TTS_CONFIG_SERVER_SET_READ_USERNAME)
-            .label("ユーザー名読み上げ切り替え")
-            .style(ButtonStyle::Primary),
-    ].into()))]
+    vec![CreateComponent::ActionRow(CreateActionRow::Buttons(
+        vec![
+            CreateButton::new(TTS_CONFIG_SERVER_DICTIONARY)
+                .label("辞書管理")
+                .style(ButtonStyle::Primary),
+            CreateButton::new(TTS_CONFIG_SERVER_SET_AUTOSTART_CHANNEL)
+                .label("自動参加チャンネル")
+                .style(ButtonStyle::Primary),
+            CreateButton::new(TTS_CONFIG_SERVER_SET_VOICE_STATE_ANNOUNCE)
+                .label("入退出アナウンス通知切り替え")
+                .style(ButtonStyle::Primary),
+            CreateButton::new(TTS_CONFIG_SERVER_SET_READ_USERNAME)
+                .label("ユーザー名読み上げ切り替え")
+                .style(ButtonStyle::Primary),
+        ]
+        .into(),
+    ))]
 }
 
 pub fn build_dictionary_menu_buttons() -> Vec<CreateComponent<'static>> {
     use crate::errors::constants::*;
 
     vec![
-        CreateComponent::ActionRow(CreateActionRow::Buttons(vec![
-            CreateButton::new(TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON)
-                .label("辞書を追加")
-                .style(ButtonStyle::Primary),
-            CreateButton::new(TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON)
-                .label("辞書を削除")
-                .style(ButtonStyle::Danger),
-            CreateButton::new(TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON)
-                .label("辞書一覧")
-                .style(ButtonStyle::Primary),
-        ].into())),
-        CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
-            .label("← サーバー設定に戻る")
-            .style(ButtonStyle::Secondary)].into())),
+        CreateComponent::ActionRow(CreateActionRow::Buttons(
+            vec![
+                CreateButton::new(TTS_CONFIG_SERVER_ADD_DICTIONARY_BUTTON)
+                    .label("辞書を追加")
+                    .style(ButtonStyle::Primary),
+                CreateButton::new(TTS_CONFIG_SERVER_REMOVE_DICTIONARY_BUTTON)
+                    .label("辞書を削除")
+                    .style(ButtonStyle::Danger),
+                CreateButton::new(TTS_CONFIG_SERVER_SHOW_DICTIONARY_BUTTON)
+                    .label("辞書一覧")
+                    .style(ButtonStyle::Primary),
+            ]
+            .into(),
+        )),
+        CreateComponent::ActionRow(CreateActionRow::Buttons(
+            vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
+                .label("← サーバー設定に戻る")
+                .style(ButtonStyle::Secondary)]
+            .into(),
+        )),
     ]
 }
 
 pub fn build_back_button() -> CreateComponent<'static> {
     use crate::errors::constants::TTS_CONFIG_SERVER_BACK;
 
-    CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
-        .label("← サーバー設定に戻る")
-        .style(ButtonStyle::Secondary)].into()))
+    CreateComponent::ActionRow(CreateActionRow::Buttons(
+        vec![CreateButton::new(TTS_CONFIG_SERVER_BACK)
+            .label("← サーバー設定に戻る")
+            .style(ButtonStyle::Secondary)]
+        .into(),
+    ))
 }
 
 pub fn extract_guild_id(interaction: &ComponentInteraction) -> Result<u64> {
@@ -142,9 +150,7 @@ pub fn parse_select_value(interaction: &ComponentInteraction, prefix: &str) -> R
             .parse::<u64>()
             .map_err(|_| NCBError::invalid_input("Failed to parse channel ID"))
     } else {
-        Err(NCBError::invalid_input(
-            "Not a string select interaction",
-        ))
+        Err(NCBError::invalid_input("Not a string select interaction"))
     }
 }
 
@@ -178,8 +184,6 @@ pub fn parse_select_index(interaction: &ComponentInteraction) -> Result<usize> {
             .parse::<usize>()
             .map_err(|_| NCBError::invalid_input("Failed to parse index"))
     } else {
-        Err(NCBError::invalid_input(
-            "Not a string select interaction",
-        ))
+        Err(NCBError::invalid_input("Not a string select interaction"))
     }
 }

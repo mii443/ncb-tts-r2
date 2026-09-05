@@ -19,9 +19,7 @@ use serenity::{all::Interaction, prelude::Context};
 /// Routes all interaction types to their respective handlers
 pub async fn handle_interaction(ctx: &Context, interaction: &Interaction) -> Result<()> {
     match interaction {
-        Interaction::Command(command) => {
-            commands::handle_command(ctx, command).await
-        }
+        Interaction::Command(command) => commands::handle_command(ctx, command).await,
         Interaction::Modal(modal) => modals::handle_modal(ctx, modal).await,
         Interaction::Component(component) => {
             // Route based on component type

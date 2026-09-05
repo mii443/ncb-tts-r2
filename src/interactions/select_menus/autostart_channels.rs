@@ -37,8 +37,7 @@ pub async fn handle_text_channel_select(
     ctx: &Context,
     interaction: &ComponentInteraction,
 ) -> Result<()> {
-    let channel_id =
-        utils::parse_select_value(interaction, "SET_AUTOSTART_TEXT_CHANNEL_")?;
+    let channel_id = utils::parse_select_value(interaction, "SET_AUTOSTART_TEXT_CHANNEL_")?;
     let guild_id = utils::extract_guild_id(interaction)?;
 
     let mut config = utils::get_server_config(ctx, guild_id).await?;

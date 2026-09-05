@@ -1,4 +1,6 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+# syntax=docker/dockerfile:1.7
+
+FROM lukemathwalker/cargo-chef:0.1.77-rust-1.95.0-slim-bookworm@sha256:e570dfdde51ef616090dd76469dc709679a39d460d76a960717459ad324297f8 AS chef
 WORKDIR /app
 
 FROM chef AS planner
@@ -9,37 +11,36 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ffmpeg \
     libssl-dev \
     pkg-config \
     libopus-dev \
-    gcc && \
+    gcc \
+    make \
+    file && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
 COPY . .
-RUN cargo build --release
+RUN cargo test --release --locked --all-targets
+RUN cargo build --release --locked
 
-FROM ubuntu:22.04 AS runtime
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS runtime
 WORKDIR /ncb-tts-r2
 
-# 非rootユーザーの作成
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    openssl \
-    ca-certificates \
-    ffmpeg \
-    libssl-dev \
-    libopus-dev && \
+        ca-certificates \
+        ffmpeg \
+        libssl3 \
+        libopus0 && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    chown appuser:appgroup /ncb-tts-r2
 
 COPY --from=builder /app/target/release/ncb-tts-r2 /usr/local/bin/ncb-tts-r2
-RUN chmod +x /usr/local/bin/ncb-tts-r2
 
-# 非rootユーザーに切り替え
 USER appuser
 
 ENTRYPOINT ["/usr/local/bin/ncb-tts-r2"]

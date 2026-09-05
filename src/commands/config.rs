@@ -16,7 +16,8 @@ pub async fn config_command(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let data = ctx.data::<UserData>();
 
-    let config = data.database
+    let config = data
+        .database
         .get_user_config_or_default(command.user.id.get())
         .await
         .unwrap()
@@ -54,18 +55,24 @@ pub async fn config_command(
         .placeholder("読み上げAPIを選択"),
     );
 
-    let voicevox_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_VOICEVOX")
-        .label("VOICEVOX設定")
-        .style(ButtonStyle::Primary)].into());
+    let voicevox_button = CreateActionRow::Buttons(
+        vec![CreateButton::new("TTS_CONFIG_VOICEVOX")
+            .label("VOICEVOX設定")
+            .style(ButtonStyle::Primary)]
+        .into(),
+    );
 
     let mut components: Vec<CreateComponent> = vec![
         CreateComponent::ActionRow(engine_select),
         CreateComponent::ActionRow(voicevox_button),
     ];
 
-    let server_button = CreateActionRow::Buttons(vec![CreateButton::new("TTS_CONFIG_SERVER")
-        .label("サーバー設定")
-        .style(ButtonStyle::Primary)].into());
+    let server_button = CreateActionRow::Buttons(
+        vec![CreateButton::new("TTS_CONFIG_SERVER")
+            .label("サーバー設定")
+            .style(ButtonStyle::Primary)]
+        .into(),
+    );
 
     components.push(CreateComponent::ActionRow(server_button));
 

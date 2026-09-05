@@ -8,10 +8,7 @@ use serenity::{
 };
 use tracing::info;
 
-use crate::{
-    data::UserData,
-    tts::instance::TTSInstance,
-};
+use crate::{data::UserData, tts::instance::TTSInstance};
 
 #[tracing::instrument(skip_all)]
 pub async fn setup_command(
@@ -19,15 +16,17 @@ pub async fn setup_command(
     command: &CommandInteraction,
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Received event");
-    
+
     if command.guild_id.is_none() {
         command
-            .create_response(&ctx.http, 
+            .create_response(
+                &ctx.http,
                 CreateInteractionResponse::Message(
                     CreateInteractionResponseMessage::new()
                         .content("このコマンドはサーバーでのみ使用可能です．")
-                        .ephemeral(true)
-                ))
+                        .ephemeral(true),
+                ),
+            )
             .await?;
         return Ok(());
     }
@@ -43,12 +42,14 @@ pub async fn setup_command(
 
     if channel_id.is_none() {
         command
-            .create_response(&ctx.http, 
+            .create_response(
+                &ctx.http,
                 CreateInteractionResponse::Message(
                     CreateInteractionResponseMessage::new()
                         .content("ボイスチャンネルに参加してから実行してください．")
-                        .ephemeral(true)
-                ))
+                        .ephemeral(true),
+                ),
+            )
             .await?;
         return Ok(());
     }
@@ -65,12 +66,14 @@ pub async fn setup_command(
         let mut storage = storage_lock.write().await;
         if storage.contains_key(&guild.id) {
             command
-                .create_response(&ctx.http, 
+                .create_response(
+                    &ctx.http,
                     CreateInteractionResponse::Message(
                         CreateInteractionResponseMessage::new()
                             .content("すでにセットアップしています．")
-                            .ephemeral(true)
-                    ))
+                            .ephemeral(true),
+                    ),
+                )
                 .await?;
             return Ok(());
         }
@@ -78,29 +81,36 @@ pub async fn setup_command(
         let text_channel_ids = {
             if let Some(mode) = command.data.options.get(0) {
                 match &mode.value {
-                    serenity::all::CommandDataOptionValue::String(value) => {
-                        match value.as_str() {
-                            "TEXT_CHANNEL" => vec![cmd_channel_id],
-                            "NEW_THREAD" => {
-                                let thread = cmd_channel_id
-                                    .create_thread(&ctx.http, CreateThread::new("TTS").auto_archive_duration(AutoArchiveDuration::OneHour).kind(serenity::all::ChannelType::PublicThread))
-                                    .await
-                                    .unwrap();
-                                vec![ChannelId::new(thread.id.get())]
-                            }
-                            "VOICE_CHANNEL" => vec![channel_id],
-                            _ => if channel_id != cmd_channel_id {
+                    serenity::all::CommandDataOptionValue::String(value) => match value.as_str() {
+                        "TEXT_CHANNEL" => vec![cmd_channel_id],
+                        "NEW_THREAD" => {
+                            let thread = cmd_channel_id
+                                .create_thread(
+                                    &ctx.http,
+                                    CreateThread::new("TTS")
+                                        .auto_archive_duration(AutoArchiveDuration::OneHour)
+                                        .kind(serenity::all::ChannelType::PublicThread),
+                                )
+                                .await
+                                .unwrap();
+                            vec![ChannelId::new(thread.id.get())]
+                        }
+                        "VOICE_CHANNEL" => vec![channel_id],
+                        _ => {
+                            if channel_id != cmd_channel_id {
                                 vec![cmd_channel_id, channel_id]
                             } else {
                                 vec![channel_id]
-                            },
+                            }
                         }
                     },
-                    _ => if channel_id != cmd_channel_id {
-                        vec![cmd_channel_id, channel_id]
-                    } else {
-                        vec![channel_id]
-                    },
+                    _ => {
+                        if channel_id != cmd_channel_id {
+                            vec![cmd_channel_id, channel_id]
+                        } else {
+                            vec![channel_id]
+                        }
+                    }
                 }
             } else {
                 if channel_id != cmd_channel_id {
@@ -122,16 +132,16 @@ pub async fn setup_command(
     };
 
     command
-        .create_response(&ctx.http, 
+        .create_response(&ctx.http,
             CreateInteractionResponse::Message(
                 CreateInteractionResponseMessage::new()
                     .content(format!(
-                        "TTS Channel: <#{}>{}", 
-                        text_channel_id, 
-                        if text_channel_id == channel_id { 
-                            "\nボイスチャンネルを右クリックし `チャットを開く` を押して開くことが出来ます。" 
-                        } else { 
-                            "" 
+                        "TTS Channel: <#{}>{}",
+                        text_channel_id,
+                        if text_channel_id == channel_id {
+                            "\nボイスチャンネルを右クリックし `チャットを開く` を押して開くことが出来ます。"
+                        } else {
+                            ""
                         }
                     ))
             ))
@@ -140,15 +150,20 @@ pub async fn setup_command(
     let _handler = manager.join(guild.id, channel_id).await;
 
     let tts_client = &data.tts_client;
-    let voicevox_speakers = tts_client.voicevox_client.get_speakers().await
+    let voicevox_speakers = tts_client
+        .voicevox_client
+        .get_speakers()
+        .await
         .unwrap_or_else(|e| {
             tracing::error!("Failed to get VOICEVOX speakers: {}", e);
             vec!["VOICEVOX API unavailable".to_string()]
         });
 
     text_channel_id
-        .widen().send_message(&ctx.http, CreateMessage::new()
-            .embed(
+        .widen()
+        .send_message(
+            &ctx.http,
+            CreateMessage::new().embed(
                 CreateEmbed::new()
                     .title("読み上げ (Serenity)")
                     .field(
@@ -157,8 +172,9 @@ pub async fn setup_command(
                         false,
                     )
                     .field("設定コマンド", "`/config`", false)
-                    .field("フィードバック", "https://feedback.mii.codes/", false)
-            ))
+                    .field("フィードバック", "https://feedback.mii.codes/", false),
+            ),
+        )
         .await?;
 
     Ok(())

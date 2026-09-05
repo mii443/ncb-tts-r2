@@ -141,9 +141,8 @@ impl ConnectionMonitor {
 
                             if let Some(&text_channel) = instance.text_channels.first() {
                                 let msg = CreateMessage::new().embed(embed);
-                                if let Err(e) = text_channel
-                                    .widen().send_message(&ctx.http, msg)
-                                    .await
+                                if let Err(e) =
+                                    text_channel.widen().send_message(&ctx.http, msg).await
                                 {
                                     error!(guild_id = %guild_id, error = %e, "Failed to send reconnection message");
                                 }

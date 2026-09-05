@@ -5,13 +5,13 @@ mod dictionary;
 mod tts_config;
 
 use crate::errors::Result;
-use serenity::{all::{ComponentInteraction, ComponentInteractionDataKind}, prelude::Context};
+use serenity::{
+    all::{ComponentInteraction, ComponentInteractionDataKind},
+    prelude::Context,
+};
 
 /// Handle select menu interactions
-pub async fn handle_select_menu(
-    ctx: &Context,
-    interaction: &ComponentInteraction,
-) -> Result<()> {
+pub async fn handle_select_menu(ctx: &Context, interaction: &ComponentInteraction) -> Result<()> {
     use crate::errors::constants::*;
 
     match interaction.data.custom_id.as_str() {

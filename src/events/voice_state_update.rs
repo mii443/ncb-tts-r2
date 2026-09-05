@@ -79,7 +79,11 @@ pub async fn voice_state_update(ctx: &Context, old: Option<VoiceState>, new: Voi
                         .field("設定コマンド", "`/config`", false)
                         .field("フィードバック", "https://feedback.mii.codes/", false);
                     let msg = CreateMessage::new().embed(embed);
-                    new_channel.widen().send_message(&ctx.http, msg).await.unwrap();
+                    new_channel
+                        .widen()
+                        .send_message(&ctx.http, msg)
+                        .await
+                        .unwrap();
                 }
             }
             return;

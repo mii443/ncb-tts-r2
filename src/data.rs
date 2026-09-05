@@ -1,8 +1,5 @@
 use crate::{database::database::Database, tts::tts::TTS};
-use serenity::{
-    model::id::GuildId,
-    prelude::RwLock,
-};
+use serenity::{model::id::GuildId, prelude::RwLock};
 
 use crate::tts::instance::TTSInstance;
 use std::{collections::HashMap, sync::Arc};

@@ -1,7 +1,5 @@
 use serenity::{
-    all::{
-        CommandInteraction, CreateInteractionResponse, CreateInteractionResponseMessage
-    },
+    all::{CommandInteraction, CreateInteractionResponse, CreateInteractionResponseMessage},
     model::prelude::UserId,
     prelude::Context,
 };
@@ -14,12 +12,14 @@ pub async fn skip_command(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if command.guild_id.is_none() {
         command
-            .create_response(&ctx.http, 
+            .create_response(
+                &ctx.http,
                 CreateInteractionResponse::Message(
                     CreateInteractionResponseMessage::new()
                         .content("このコマンドはサーバーでのみ使用可能です．")
-                        .ephemeral(true)
-                ))
+                        .ephemeral(true),
+                ),
+            )
             .await?;
         return Ok(());
     }
@@ -34,12 +34,14 @@ pub async fn skip_command(
 
     if channel_id.is_none() {
         command
-            .create_response(&ctx.http, 
+            .create_response(
+                &ctx.http,
                 CreateInteractionResponse::Message(
                     CreateInteractionResponseMessage::new()
                         .content("ボイスチャンネルに参加してから実行してください．")
-                        .ephemeral(true)
-                ))
+                        .ephemeral(true),
+                ),
+            )
             .await?;
         return Ok(());
     }
@@ -50,12 +52,14 @@ pub async fn skip_command(
         let mut storage = storage_lock.write().await;
         if !storage.contains_key(&guild.id) {
             command
-                .create_response(&ctx.http, 
+                .create_response(
+                    &ctx.http,
                     CreateInteractionResponse::Message(
                         CreateInteractionResponseMessage::new()
                             .content("読み上げしていません")
-                            .ephemeral(true)
-                    ))
+                            .ephemeral(true),
+                    ),
+                )
                 .await?;
             return Ok(());
         }
@@ -64,11 +68,12 @@ pub async fn skip_command(
     }
 
     command
-        .create_response(&ctx.http, 
+        .create_response(
+            &ctx.http,
             CreateInteractionResponse::Message(
-                CreateInteractionResponseMessage::new()
-                    .content("スキップしました")
-            ))
+                CreateInteractionResponseMessage::new().content("スキップしました"),
+            ),
+        )
         .await?;
 
     Ok(())

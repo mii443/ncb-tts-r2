@@ -1,29 +1,16 @@
-mod commands;
-mod config;
-mod connection_monitor;
-mod data;
-mod database;
-mod errors;
-mod event_handler;
-mod events;
-mod implement;
-mod interactions;
-mod stream_input;
-mod trace;
-mod tts;
-mod utils;
-
 use std::{collections::HashMap, env, sync::Arc};
 
-use config::Config;
-use data::UserData;
-use database::database::Database;
-use errors::{NCBError, Result};
-use event_handler::Handler;
+use ncb_tts_r2::{
+    config::Config,
+    data::UserData,
+    database::database::Database,
+    errors::{NCBError, Result},
+    event_handler::Handler,
+    trace::init_tracing_subscriber,
+    tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX},
+};
 use serenity::prelude::{Client, GatewayIntents, RwLock, Token};
-use trace::init_tracing_subscriber;
 use tracing::info;
-use tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX};
 
 #[tokio::main]
 async fn main() {
@@ -45,7 +32,7 @@ async fn run() -> Result<()> {
 
     let tts = GCPTTS::new("./credentials.json".to_string())
         .await
-        .map_err(|e| NCBError::GCPAuth(e))?;
+        .map_err(NCBError::GCPAuth)?;
     let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url);
     let database_client = Database::new_with_url(config.redis_url).await?;
 
@@ -56,7 +43,10 @@ async fn run() -> Result<()> {
         database: Arc::new(database_client),
     };
 
-    let token: Token = config.token.parse().map_err(|_| NCBError::config("Invalid Discord token"))?;
+    let token: Token = config
+        .token
+        .parse()
+        .map_err(|_| NCBError::config("Invalid Discord token"))?;
 
     let mut client = Client::builder(token, GatewayIntents::all())
         .event_handler(Arc::new(Handler))
@@ -71,7 +61,7 @@ async fn run() -> Result<()> {
 
 fn load_config() -> Result<Config> {
     if let Ok(config_str) = std::fs::read_to_string("./config.toml") {
-        return toml::from_str::<Config>(&config_str).map_err(|e| NCBError::Toml(e));
+        return toml::from_str::<Config>(&config_str).map_err(NCBError::Toml);
     }
 
     let token = env::var("NCB_TOKEN").map_err(|_| NCBError::missing_env_var("NCB_TOKEN"))?;

@@ -5,10 +5,7 @@ use serenity::{
 };
 use tracing::info;
 
-use crate::{
-    connection_monitor::ConnectionMonitor,
-    data::UserData,
-};
+use crate::{connection_monitor::ConnectionMonitor, data::UserData};
 
 #[tracing::instrument(skip_all)]
 pub async fn ready(ctx: &Context, ready: &Ready) {

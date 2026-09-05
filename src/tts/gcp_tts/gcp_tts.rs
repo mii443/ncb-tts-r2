@@ -88,8 +88,10 @@ impl GCPTTS {
             Ok(ok) => {
                 let response: SynthesizeResponse =
                     serde_json::from_str(&ok.text().await.expect("")).unwrap();
-                use base64::{Engine as _, engine::general_purpose};
-                Ok(general_purpose::STANDARD.decode(response.audioContent).unwrap())
+                use base64::{engine::general_purpose, Engine as _};
+                Ok(general_purpose::STANDARD
+                    .decode(response.audioContent)
+                    .unwrap())
             }
             Err(err) => Err(Box::new(err)),
         }

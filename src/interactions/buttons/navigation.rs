@@ -62,7 +62,8 @@ pub async fn handle_back_to_main_config(
 ) -> Result<()> {
     let data = ctx.data::<UserData>();
 
-    let config = data.database
+    let config = data
+        .database
         .get_user_config_or_default(interaction.user.id.get())
         .await
         .map_err(|e| NCBError::database(format!("Failed to get user config: {}", e)))?
@@ -78,29 +79,30 @@ pub async fn handle_back_to_main_config(
             "TTS_CONFIG_ENGINE",
             CreateSelectMenuKind::String {
                 options: vec![
-                    CreateSelectMenuOption::new(
-                        "Google TTS",
-                        TTS_CONFIG_ENGINE_SELECTED_GOOGLE,
-                    )
-                    .default_selection(tts_type == TTSType::GCP),
-                    CreateSelectMenuOption::new(
-                        "VOICEVOX",
-                        TTS_CONFIG_ENGINE_SELECTED_VOICEVOX,
-                    )
-                    .default_selection(tts_type == TTSType::VOICEVOX),
-                ].into(),
+                    CreateSelectMenuOption::new("Google TTS", TTS_CONFIG_ENGINE_SELECTED_GOOGLE)
+                        .default_selection(tts_type == TTSType::GCP),
+                    CreateSelectMenuOption::new("VOICEVOX", TTS_CONFIG_ENGINE_SELECTED_VOICEVOX)
+                        .default_selection(tts_type == TTSType::VOICEVOX),
+                ]
+                .into(),
             },
         )
         .placeholder("読み上げAPIを選択"),
     );
 
-    let voicevox_button = CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_VOICEVOX)
-        .label("VOICEVOX設定")
-        .style(ButtonStyle::Primary)].into());
+    let voicevox_button = CreateActionRow::Buttons(
+        vec![CreateButton::new(TTS_CONFIG_VOICEVOX)
+            .label("VOICEVOX設定")
+            .style(ButtonStyle::Primary)]
+        .into(),
+    );
 
-    let server_button = CreateActionRow::Buttons(vec![CreateButton::new(TTS_CONFIG_SERVER)
-        .label("サーバー設定")
-        .style(ButtonStyle::Primary)].into());
+    let server_button = CreateActionRow::Buttons(
+        vec![CreateButton::new(TTS_CONFIG_SERVER)
+            .label("サーバー設定")
+            .style(ButtonStyle::Primary)]
+        .into(),
+    );
 
     let components: Vec<CreateComponent> = vec![
         CreateComponent::ActionRow(engine_select),

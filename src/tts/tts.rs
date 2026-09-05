@@ -392,7 +392,6 @@ impl TTS {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::constants::CIRCUIT_BREAKER_FAILURE_THRESHOLD;
     use crate::tts::gcp_tts::structs::{
         synthesis_input::SynthesisInput, voice_selection_params::VoiceSelectionParams,
     };

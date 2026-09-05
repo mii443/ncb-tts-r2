@@ -13,25 +13,33 @@ pub async fn handle_command(ctx: &Context, command: &CommandInteraction) -> Resu
         "setup" => {
             crate::commands::setup::setup_command(ctx, command)
                 .await
-                .map_err(|e| crate::errors::NCBError::config(&format!("Setup command failed: {}", e)))?;
+                .map_err(|e| {
+                    crate::errors::NCBError::config(&format!("Setup command failed: {}", e))
+                })?;
             Ok(())
         }
         "stop" => {
             crate::commands::stop::stop_command(ctx, command)
                 .await
-                .map_err(|e| crate::errors::NCBError::config(&format!("Stop command failed: {}", e)))?;
+                .map_err(|e| {
+                    crate::errors::NCBError::config(&format!("Stop command failed: {}", e))
+                })?;
             Ok(())
         }
         "config" => {
             crate::commands::config::config_command(ctx, command)
                 .await
-                .map_err(|e| crate::errors::NCBError::config(&format!("Config command failed: {}", e)))?;
+                .map_err(|e| {
+                    crate::errors::NCBError::config(&format!("Config command failed: {}", e))
+                })?;
             Ok(())
         }
         "skip" => {
             crate::commands::skip::skip_command(ctx, command)
                 .await
-                .map_err(|e| crate::errors::NCBError::config(&format!("Skip command failed: {}", e)))?;
+                .map_err(|e| {
+                    crate::errors::NCBError::config(&format!("Skip command failed: {}", e))
+                })?;
             Ok(())
         }
         _ => Ok(()),

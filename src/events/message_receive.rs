@@ -1,4 +1,4 @@
-use serenity::{model::prelude::Message, model::id::ChannelId, prelude::Context};
+use serenity::{model::id::ChannelId, model::prelude::Message, prelude::Context};
 
 use crate::data::UserData;
 

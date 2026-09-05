@@ -25,7 +25,8 @@ impl TTSMessage for Message {
         let data = ctx.data::<UserData>();
 
         let config = {
-            match data.database
+            match data
+                .database
                 .get_server_config_or_default(instance.guild.get())
                 .await
             {
@@ -107,7 +108,8 @@ impl TTSMessage for Message {
         let data = ctx.data::<UserData>();
 
         let config = {
-            match data.database
+            match data
+                .database
                 .get_user_config_or_default(self.author.id.get())
                 .await
             {

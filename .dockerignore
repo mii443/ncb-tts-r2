@@ -1,2 +1,11 @@
+.git
+.github
+.agents
+.codex
+.idea
 target
 audio
+config.toml
+credentials.json
+tts_cache.bin
+*.swp

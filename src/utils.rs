@@ -1,5 +1,5 @@
-use once_cell::sync::Lazy;
 use lru::LruCache;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{num::NonZeroUsize, sync::RwLock};
 use tracing::{debug, error, warn};
@@ -7,8 +7,11 @@ use tracing::{debug, error, warn};
 use crate::errors::{constants::*, NCBError, Result};
 
 /// Regex compilation cache to avoid recompiling the same patterns
-static REGEX_CACHE: Lazy<RwLock<LruCache<String, Regex>>> = 
-    Lazy::new(|| RwLock::new(LruCache::new(NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap())));
+static REGEX_CACHE: Lazy<RwLock<LruCache<String, Regex>>> = Lazy::new(|| {
+    RwLock::new(LruCache::new(
+        NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap(),
+    ))
+});
 
 /// Circuit breaker states for external API calls
 #[derive(Debug, Clone, PartialEq)]
@@ -137,7 +140,7 @@ where
 
     loop {
         attempts += 1;
-        
+
         match operation().await {
             Ok(result) => {
                 if attempts > 1 {
@@ -191,7 +194,7 @@ impl RateLimiter {
 
     pub fn try_acquire(&self, tokens: f64) -> bool {
         self.refill();
-        
+
         let mut current_tokens = self.tokens.write().unwrap();
         if *current_tokens >= tokens {
             *current_tokens -= tokens;
@@ -205,7 +208,7 @@ impl RateLimiter {
         let now = std::time::Instant::now();
         let mut last_refill = self.last_refill.write().unwrap();
         let elapsed = now.duration_since(*last_refill).as_secs_f64();
-        
+
         if elapsed > 0.0 {
             let tokens_to_add = elapsed * self.refill_rate;
             let mut current_tokens = self.tokens.write().unwrap();
@@ -233,42 +236,61 @@ impl PerformanceMetrics {
     }
 
     pub fn increment_tts_requests(&self) {
-        self.tts_requests.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.tts_requests
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn increment_tts_cache_hits(&self) {
-        self.tts_cache_hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.tts_cache_hits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn increment_tts_cache_misses(&self) {
-        self.tts_cache_misses.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.tts_cache_misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn increment_regex_cache_hits(&self) {
-        self.regex_cache_hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.regex_cache_hits
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn increment_regex_cache_misses(&self) {
-        self.regex_cache_misses.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.regex_cache_misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn increment_database_operations(&self) {
-        self.database_operations.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.database_operations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn increment_voice_connections(&self) {
-        self.voice_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.voice_connections
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn get_stats(&self) -> MetricsSnapshot {
         MetricsSnapshot {
             tts_requests: self.tts_requests.load(std::sync::atomic::Ordering::Relaxed),
-            tts_cache_hits: self.tts_cache_hits.load(std::sync::atomic::Ordering::Relaxed),
-            tts_cache_misses: self.tts_cache_misses.load(std::sync::atomic::Ordering::Relaxed),
-            regex_cache_hits: self.regex_cache_hits.load(std::sync::atomic::Ordering::Relaxed),
-            regex_cache_misses: self.regex_cache_misses.load(std::sync::atomic::Ordering::Relaxed),
-            database_operations: self.database_operations.load(std::sync::atomic::Ordering::Relaxed),
-            voice_connections: self.voice_connections.load(std::sync::atomic::Ordering::Relaxed),
+            tts_cache_hits: self
+                .tts_cache_hits
+                .load(std::sync::atomic::Ordering::Relaxed),
+            tts_cache_misses: self
+                .tts_cache_misses
+                .load(std::sync::atomic::Ordering::Relaxed),
+            regex_cache_hits: self
+                .regex_cache_hits
+                .load(std::sync::atomic::Ordering::Relaxed),
+            regex_cache_misses: self
+                .regex_cache_misses
+                .load(std::sync::atomic::Ordering::Relaxed),
+            database_operations: self
+                .database_operations
+                .load(std::sync::atomic::Ordering::Relaxed),
+            voice_connections: self
+                .voice_connections
+                .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 }
@@ -305,9 +327,9 @@ impl MetricsSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use crate::errors::constants::CIRCUIT_BREAKER_FAILURE_THRESHOLD;
-    
+    use std::time::Duration;
+
     #[test]
     fn test_circuit_breaker_default() {
         let cb = CircuitBreaker::default();
@@ -315,7 +337,7 @@ mod tests {
         assert_eq!(cb.failure_count, 0);
         assert!(cb.can_execute());
     }
-    
+
     #[test]
     fn test_circuit_breaker_new() {
         let cb = CircuitBreaker::new(3, Duration::from_secs(10));
@@ -323,11 +345,11 @@ mod tests {
         assert_eq!(cb.threshold, 3);
         assert_eq!(cb.timeout, Duration::from_secs(10));
     }
-    
+
     #[test]
     fn test_circuit_breaker_failure_threshold() {
         let mut cb = CircuitBreaker::default();
-        
+
         // Test failures up to threshold
         for i in 0..CIRCUIT_BREAKER_FAILURE_THRESHOLD {
             assert_eq!(cb.state, CircuitBreakerState::Closed);
@@ -335,65 +357,65 @@ mod tests {
             cb.on_failure();
             assert_eq!(cb.failure_count, i + 1);
         }
-        
+
         // Should open after reaching threshold
         assert_eq!(cb.state, CircuitBreakerState::Open);
         assert!(!cb.can_execute());
     }
-    
+
     #[test]
     fn test_circuit_breaker_success_resets() {
         let mut cb = CircuitBreaker::default();
-        
+
         // Add some failures
         cb.on_failure();
         cb.on_failure();
         assert_eq!(cb.failure_count, 2);
-        
+
         // Success should reset
         cb.on_success();
         assert_eq!(cb.failure_count, 0);
         assert_eq!(cb.state, CircuitBreakerState::Closed);
     }
-    
+
     #[test]
     fn test_circuit_breaker_half_open() {
         let mut cb = CircuitBreaker::new(1, Duration::from_millis(100));
-        
+
         // Trigger failure to open circuit
         cb.on_failure();
         assert_eq!(cb.state, CircuitBreakerState::Open);
         assert!(!cb.can_execute());
-        
+
         // Wait for timeout
         std::thread::sleep(Duration::from_millis(150));
-        
+
         // Should allow transition to half-open
         cb.try_half_open();
         assert_eq!(cb.state, CircuitBreakerState::HalfOpen);
         assert!(cb.can_execute());
-        
+
         // Success in half-open should close circuit
         cb.on_success();
         assert_eq!(cb.state, CircuitBreakerState::Closed);
     }
-    
+
     #[test]
     fn test_circuit_breaker_half_open_failure() {
         let mut cb = CircuitBreaker::new(1, Duration::from_millis(100));
-        
+
         // Open circuit
         cb.on_failure();
         std::thread::sleep(Duration::from_millis(150));
         cb.try_half_open();
         assert_eq!(cb.state, CircuitBreakerState::HalfOpen);
-        
+
         // Failure in half-open should reopen circuit
         cb.on_failure();
         assert_eq!(cb.state, CircuitBreakerState::Open);
         assert!(!cb.can_execute());
     }
-    
+
     #[tokio::test]
     async fn test_retry_with_backoff_success_first_try() {
         let mut call_count = 0;
@@ -404,12 +426,13 @@ mod tests {
             },
             3,
             Duration::from_millis(100),
-        ).await;
-        
+        )
+        .await;
+
         assert_eq!(result.unwrap(), 42);
         assert_eq!(call_count, 1);
     }
-    
+
     #[tokio::test]
     async fn test_retry_with_backoff_success_after_retries() {
         let mut call_count = 0;
@@ -426,12 +449,13 @@ mod tests {
             },
             5,
             Duration::from_millis(10),
-        ).await;
-        
+        )
+        .await;
+
         assert_eq!(result.unwrap(), 42);
         assert_eq!(call_count, 3);
     }
-    
+
     #[tokio::test]
     async fn test_retry_with_backoff_max_attempts() {
         let mut call_count = 0;
@@ -442,13 +466,14 @@ mod tests {
             },
             3,
             Duration::from_millis(10),
-        ).await;
-        
+        )
+        .await;
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "persistent error");
         assert_eq!(call_count, 3);
     }
-    
+
     #[test]
     fn test_get_cached_regex_valid_pattern() {
         // Clear cache first
@@ -456,27 +481,27 @@ mod tests {
             let mut cache = REGEX_CACHE.write().unwrap();
             cache.clear();
         }
-        
+
         let pattern = r"[a-zA-Z]+";
         let result1 = get_cached_regex(pattern);
         assert!(result1.is_ok());
-        
+
         let result2 = get_cached_regex(pattern);
         assert!(result2.is_ok());
-        
+
         // Both should work and second should be from cache
         let regex1 = result1.unwrap();
         let regex2 = result2.unwrap();
         assert!(regex1.is_match("hello"));
         assert!(regex2.is_match("world"));
     }
-    
+
     #[test]
     fn test_get_cached_regex_invalid_pattern() {
         let pattern = r"[";
         let result = get_cached_regex(pattern);
         assert!(result.is_err());
-        
+
         if let Err(NCBError::InvalidRegex(msg)) = result {
             // The error message contains the pattern and the regex error
             assert!(msg.contains("["));
@@ -484,54 +509,74 @@ mod tests {
             panic!("Expected InvalidRegex error");
         }
     }
-    
+
     #[test]
     fn test_rate_limiter_basic() {
         let limiter = RateLimiter::new(5.0, 1.0); // 5 tokens, 1 per second
-        
+
         // Should be able to acquire 5 tokens initially
         assert!(limiter.try_acquire(1.0));
         assert!(limiter.try_acquire(1.0));
         assert!(limiter.try_acquire(1.0));
         assert!(limiter.try_acquire(1.0));
         assert!(limiter.try_acquire(1.0));
-        
+
         // 6th token should fail
         assert!(!limiter.try_acquire(1.0));
     }
-    
+
     #[test]
     fn test_rate_limiter_partial_tokens() {
         let limiter = RateLimiter::new(2.0, 1.0);
-        
+
         // Acquire partial tokens
         assert!(limiter.try_acquire(0.5));
         assert!(limiter.try_acquire(0.5));
         assert!(limiter.try_acquire(0.5));
         assert!(limiter.try_acquire(0.5));
-        
+
         // Should fail with no tokens left
         assert!(!limiter.try_acquire(0.1));
     }
-    
+
     #[test]
     fn test_performance_metrics_increment() {
         let metrics = PerformanceMetrics::default();
-        
-        assert_eq!(metrics.tts_requests.load(std::sync::atomic::Ordering::Relaxed), 0);
-        
+
+        assert_eq!(
+            metrics
+                .tts_requests
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+
         metrics.increment_tts_requests();
         metrics.increment_tts_requests();
-        
-        assert_eq!(metrics.tts_requests.load(std::sync::atomic::Ordering::Relaxed), 2);
-        
+
+        assert_eq!(
+            metrics
+                .tts_requests
+                .load(std::sync::atomic::Ordering::Relaxed),
+            2
+        );
+
         metrics.increment_tts_cache_hits();
-        assert_eq!(metrics.tts_cache_hits.load(std::sync::atomic::Ordering::Relaxed), 1);
-        
+        assert_eq!(
+            metrics
+                .tts_cache_hits
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+
         metrics.increment_tts_cache_misses();
-        assert_eq!(metrics.tts_cache_misses.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(
+            metrics
+                .tts_cache_misses
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
     }
-    
+
     #[test]
     fn test_metrics_snapshot_cache_hit_rate() {
         let snapshot = MetricsSnapshot {
@@ -543,9 +588,9 @@ mod tests {
             database_operations: 0,
             voice_connections: 0,
         };
-        
+
         assert!((snapshot.tts_cache_hit_rate() - 0.7).abs() < f64::EPSILON);
-        
+
         let empty_snapshot = MetricsSnapshot {
             tts_requests: 0,
             tts_cache_hits: 0,
@@ -555,10 +600,10 @@ mod tests {
             database_operations: 0,
             voice_connections: 0,
         };
-        
+
         assert_eq!(empty_snapshot.tts_cache_hit_rate(), 0.0);
     }
-    
+
     #[test]
     fn test_metrics_snapshot_regex_cache_hit_rate() {
         let snapshot = MetricsSnapshot {
@@ -570,22 +615,22 @@ mod tests {
             database_operations: 0,
             voice_connections: 0,
         };
-        
+
         assert!((snapshot.regex_cache_hit_rate() - 0.8).abs() < f64::EPSILON);
     }
-    
+
     #[test]
     fn test_performance_metrics_get_stats() {
         let metrics = PerformanceMetrics::default();
-        
+
         // Add some data
         metrics.increment_tts_requests();
         metrics.increment_tts_requests();
         metrics.increment_tts_cache_hits();
         metrics.increment_database_operations();
-        
+
         let stats = metrics.get_stats();
-        
+
         assert_eq!(stats.tts_requests, 2);
         assert_eq!(stats.tts_cache_hits, 1);
         assert_eq!(stats.tts_cache_misses, 0);

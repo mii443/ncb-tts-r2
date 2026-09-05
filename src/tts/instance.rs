@@ -77,11 +77,11 @@ impl TTSInstance {
     pub async fn reconnect(
         &self,
         ctx: &Context,
-        skip_check: bool,
+        _skip_check: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let manager = ctx.data::<UserData>().songbird.clone();
 
-        if self.check_connection(&ctx).await {
+        if self.check_connection(ctx).await {
             tracing::info!("Already connected to guild {}", self.guild);
             return Ok(());
         }

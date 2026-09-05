@@ -1,7 +1,7 @@
 use crate::{errors::NCBError, events, interactions};
 use serenity::{
     async_trait,
-    model::{application::Interaction, channel::Message, gateway::Ready, voice::VoiceState},
+    model::application::Interaction,
     prelude::{Context, EventHandler},
 };
 

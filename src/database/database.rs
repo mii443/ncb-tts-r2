@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use bb8_redis::{bb8::Pool, redis::AsyncCommands, RedisConnectionManager};
-use serenity::model::id::{ChannelId, GuildId, UserId};
+use serenity::model::id::{GuildId, UserId};
 use std::collections::HashMap;
 
 use super::{dictionary::Dictionary, server_config::ServerConfig, user_config::UserConfig};
@@ -346,6 +346,7 @@ mod tests {
     use super::*;
     use crate::errors::constants;
     use bb8_redis::redis::AsyncCommands;
+    use serenity::model::id::ChannelId;
     use serial_test::serial;
 
     // Helper function to create test database (requires Redis running)

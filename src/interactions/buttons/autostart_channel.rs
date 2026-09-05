@@ -2,7 +2,10 @@
 //!
 //! Handles the button for configuring autostart voice and text channels
 
-use crate::{errors::{NCBError, Result}, interactions::utils};
+use crate::{
+    errors::{NCBError, Result},
+    interactions::utils,
+};
 use serenity::{
     all::{
         ButtonStyle, ChannelType, ComponentInteraction, CreateActionRow, CreateButton,
@@ -57,10 +60,9 @@ pub async fn handle_show_autostart_menu(
 
     // Build text channel options
     let mut text_options = vec![];
-    let clear_option =
-        CreateSelectMenuOption::new("解除", "SET_AUTOSTART_TEXT_CHANNEL_CLEAR")
-            .description("自動参加テキストチャンネルを解除します")
-            .default_selection(config.autostart_text_channel_id.is_none());
+    let clear_option = CreateSelectMenuOption::new("解除", "SET_AUTOSTART_TEXT_CHANNEL_CLEAR")
+        .description("自動参加テキストチャンネルを解除します")
+        .default_selection(config.autostart_text_channel_id.is_none());
     text_options.push(clear_option);
 
     for channel in channels {
@@ -76,9 +78,7 @@ pub async fn handle_show_autostart_menu(
             format!("SET_AUTOSTART_TEXT_CHANNEL_{}", channel.id.get()),
         )
         .description(description)
-        .default_selection(
-            channel.id.get() == config.autostart_text_channel_id.unwrap_or(0),
-        );
+        .default_selection(channel.id.get() == config.autostart_text_channel_id.unwrap_or(0));
         text_options.push(option);
     }
 
@@ -109,11 +109,12 @@ pub async fn handle_show_autostart_menu(
                             .min_values(0)
                             .max_values(1),
                         )),
-                        CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(
-                            "TTS_CONFIG_SERVER_BACK",
-                        )
-                        .label("← サーバー設定に戻る")
-                        .style(ButtonStyle::Secondary)].into())),
+                        CreateComponent::ActionRow(CreateActionRow::Buttons(
+                            vec![CreateButton::new("TTS_CONFIG_SERVER_BACK")
+                                .label("← サーバー設定に戻る")
+                                .style(ButtonStyle::Secondary)]
+                            .into(),
+                        )),
                     ]),
             ),
         )
