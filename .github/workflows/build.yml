@@ -50,7 +50,11 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/mii443/ncb-tts-r2:buildcache
+          # Tags can restore the default branch's CI cache. Keep the registry
+          # fallback so releases also reuse caches written by earlier tags.
+          cache-from: |
+            type=gha,scope=ncb-tts-r2-ci
+            type=registry,ref=ghcr.io/mii443/ncb-tts-r2:buildcache
           cache-to: type=registry,ref=ghcr.io/mii443/ncb-tts-r2:buildcache,mode=max
           provenance: mode=max
           sbom: true

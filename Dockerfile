@@ -8,7 +8,6 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libssl-dev \
@@ -19,7 +18,12 @@ RUN apt-get update && \
     file && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-RUN cargo chef cook --release --locked --recipe-path recipe.json
+COPY --from=planner /app/recipe.json recipe.json
+# Warm both production and test feature sets before copying application sources.
+# Tests enable dev-dependencies (e.g. tokio/test-util), rebuilding their consumers
+# unless that second dependency graph is also part of the cached recipe layer.
+RUN cargo chef cook --release --locked --recipe-path recipe.json && \
+    cargo chef cook --release --locked --all-targets --recipe-path recipe.json
 COPY . .
 RUN cargo test --release --locked --all-targets
 RUN cargo build --release --locked

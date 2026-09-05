@@ -18,7 +18,7 @@ env:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -27,16 +27,15 @@ jobs:
       - name: Install Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt,clippy
 
-      - name: Restore Rust build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: cargo-1.95.0-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            cargo-1.95.0-${{ runner.os }}-
+          # Also keys on rustc, Cargo.toml features, lockfile and compiler flags.
+          # Workspace/incremental artifacts are intentionally excluded.
+          key: ubuntu-24.04
+          cache-bin: false
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -58,7 +57,7 @@ jobs:
 
   container:
     needs: rust
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
