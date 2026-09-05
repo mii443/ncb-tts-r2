@@ -52,19 +52,17 @@ async fn toggle_boolean_setting<F, G>(
     success_message: G,
 ) -> Result<()>
 where
-    F: FnOnce(&mut crate::database::server_config::ServerConfig) -> &mut Option<bool>,
+    F: Fn(&mut crate::database::server_config::ServerConfig) -> &mut Option<bool>,
     G: Fn(bool) -> String,
 {
     let guild_id = utils::extract_guild_id(interaction)?;
-    let mut config = utils::get_server_config(ctx, guild_id).await?;
-
-    // Toggle the field
-    let field = field_updater(&mut config);
-    *field = Some(!field.unwrap_or(true));
-    let new_state = field.unwrap_or(true);
-
-    // Save config
-    utils::set_server_config(ctx, guild_id, config).await?;
+    let mut config = utils::update_server_config(ctx, guild_id, |config| {
+        let field = field_updater(config);
+        *field = Some(!field.unwrap_or(true));
+        Ok(())
+    })
+    .await?;
+    let new_state = field_updater(&mut config).unwrap_or(true);
 
     // Send response
     utils::update_interaction_message(ctx, interaction, success_message(new_state)).await?;

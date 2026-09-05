@@ -1,165 +1,105 @@
+use crate::{
+    data::UserData,
+    errors::{NCBError, Result},
+    tts::{
+        instance::TTSInstance,
+        session::{get_session, TTSSession},
+    },
+};
 use serenity::{
     all::{
-        AutoArchiveDuration, ChannelId, CommandInteraction, CreateEmbed, CreateInteractionResponse,
-        CreateInteractionResponseMessage, CreateMessage, CreateThread,
+        AutoArchiveDuration, ChannelId, CommandDataOptionValue, CommandInteraction, CreateEmbed,
+        CreateMessage, CreateThread, EditInteractionResponse,
     },
-    model::prelude::UserId,
     prelude::Context,
 };
-use tracing::info;
-
-use crate::{data::UserData, tts::instance::TTSInstance};
 
 #[tracing::instrument(skip_all)]
-pub async fn setup_command(
-    ctx: &Context,
-    command: &CommandInteraction,
-) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Received event");
-
-    if command.guild_id.is_none() {
-        command
-            .create_response(
-                &ctx.http,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .content("このコマンドはサーバーでのみ使用可能です．")
-                        .ephemeral(true),
-                ),
-            )
-            .await?;
-        return Ok(());
-    }
-
-    info!("Fetching guild cache");
-    let guild_id = command.guild_id.unwrap();
-    let guild = guild_id.to_guild_cached(&ctx.cache).unwrap().clone();
-
-    let channel_id = guild
-        .voice_states
-        .get(&UserId::from(command.user.id.get()))
-        .and_then(|voice_state| voice_state.channel_id);
-
-    if channel_id.is_none() {
-        command
-            .create_response(
-                &ctx.http,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .content("ボイスチャンネルに参加してから実行してください．")
-                        .ephemeral(true),
-                ),
-            )
-            .await?;
-        return Ok(());
-    }
-
-    let channel_id = channel_id.unwrap();
-
+pub async fn setup_command(ctx: &Context, command: &CommandInteraction) -> Result<()> {
+    let guild_id = command.guild_id.ok_or(NCBError::GuildNotFound)?;
+    let channel_id = {
+        let guild = ctx.cache.guild(guild_id).ok_or(NCBError::GuildNotFound)?;
+        guild
+            .voice_states
+            .get(&command.user.id)
+            .and_then(|state| state.channel_id)
+            .ok_or(NCBError::UserNotInVoiceChannel)?
+    };
+    command.defer(&ctx.http).await?;
     let data = ctx.data::<UserData>();
-    let manager = data.songbird.clone();
-    let storage_lock = data.tts_data.clone();
-
-    let cmd_channel_id = ChannelId::new(command.channel_id.get());
-
-    let text_channel_id = {
-        let mut storage = storage_lock.write().await;
-        if storage.contains_key(&guild.id) {
-            command
-                .create_response(
+    let setup_guard = data.setup_guard(guild_id).await;
+    if get_session(ctx, guild_id).await.is_some() {
+        command
+            .edit_response(
+                &ctx.http,
+                EditInteractionResponse::new().content("すでにセットアップしています。"),
+            )
+            .await?;
+        return Ok(());
+    }
+    let command_channel = ChannelId::new(command.channel_id.get());
+    let mode = command
+        .data
+        .options
+        .first()
+        .and_then(|option| match &option.value {
+            CommandDataOptionValue::String(mode) => Some(mode.as_str()),
+            _ => None,
+        });
+    let text_channels = match mode {
+        Some("TEXT_CHANNEL") => vec![command_channel],
+        Some("VOICE_CHANNEL") => vec![channel_id],
+        Some("NEW_THREAD") => {
+            let thread = command_channel
+                .create_thread(
                     &ctx.http,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content("すでにセットアップしています．")
-                            .ephemeral(true),
-                    ),
+                    CreateThread::new("TTS")
+                        .auto_archive_duration(AutoArchiveDuration::OneHour)
+                        .kind(serenity::all::ChannelType::PublicThread),
                 )
                 .await?;
-            return Ok(());
+            vec![ChannelId::new(thread.id.get())]
         }
-
-        let text_channel_ids = {
-            if let Some(mode) = command.data.options.get(0) {
-                match &mode.value {
-                    serenity::all::CommandDataOptionValue::String(value) => match value.as_str() {
-                        "TEXT_CHANNEL" => vec![cmd_channel_id],
-                        "NEW_THREAD" => {
-                            let thread = cmd_channel_id
-                                .create_thread(
-                                    &ctx.http,
-                                    CreateThread::new("TTS")
-                                        .auto_archive_duration(AutoArchiveDuration::OneHour)
-                                        .kind(serenity::all::ChannelType::PublicThread),
-                                )
-                                .await
-                                .unwrap();
-                            vec![ChannelId::new(thread.id.get())]
-                        }
-                        "VOICE_CHANNEL" => vec![channel_id],
-                        _ => {
-                            if channel_id != cmd_channel_id {
-                                vec![cmd_channel_id, channel_id]
-                            } else {
-                                vec![channel_id]
-                            }
-                        }
-                    },
-                    _ => {
-                        if channel_id != cmd_channel_id {
-                            vec![cmd_channel_id, channel_id]
-                        } else {
-                            vec![channel_id]
-                        }
-                    }
-                }
-            } else {
-                if channel_id != cmd_channel_id {
-                    vec![cmd_channel_id, channel_id]
-                } else {
-                    vec![channel_id]
-                }
-            }
-        };
-
-        let instance = TTSInstance::new(text_channel_ids.clone(), channel_id, guild.id);
-        storage.insert(guild.id, instance.clone());
-
-        if let Err(e) = data.database.save_tts_instance(guild.id, &instance).await {
-            tracing::error!("Failed to save TTS instance to database: {}", e);
-        }
-
-        text_channel_ids[0]
+        _ if command_channel != channel_id => vec![command_channel, channel_id],
+        _ => vec![channel_id],
     };
-
+    let text_channel = text_channels[0];
+    let session = TTSSession::new(
+        TTSInstance::new(text_channels, channel_id, guild_id),
+        ctx.clone(),
+        false,
+    );
+    data.tts_data
+        .write()
+        .await
+        .insert(guild_id, session.clone());
+    drop(setup_guard);
+    session.connect(ctx).await?;
     command
-        .create_response(&ctx.http,
-            CreateInteractionResponse::Message(
-                CreateInteractionResponseMessage::new()
-                    .content(format!(
-                        "TTS Channel: <#{}>{}",
-                        text_channel_id,
-                        if text_channel_id == channel_id {
-                            "\nボイスチャンネルを右クリックし `チャットを開く` を押して開くことが出来ます。"
-                        } else {
-                            ""
-                        }
-                    ))
-            ))
+        .edit_response(
+            &ctx.http,
+            EditInteractionResponse::new().content(format!(
+                "TTS Channel: <#{}>{}",
+                text_channel,
+                if text_channel == channel_id {
+                    "\nボイスチャンネルのチャットを開いて利用できます。"
+                } else {
+                    ""
+                },
+            )),
+        )
         .await?;
 
-    let _handler = manager.join(guild.id, channel_id).await;
-
-    let tts_client = &data.tts_client;
-    let voicevox_speakers = tts_client
+    let speakers = data
+        .tts_client
         .voicevox_client
         .get_speakers()
         .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to get VOICEVOX speakers: {}", e);
-            vec!["VOICEVOX API unavailable".to_string()]
+        .unwrap_or_else(|error| {
+            tracing::warn!(error = %error, "Cannot fetch VOICEVOX credits");
+            vec!["VOICEVOX API unavailable".into()]
         });
-
-    text_channel_id
+    text_channel
         .widen()
         .send_message(
             &ctx.http,
@@ -168,7 +108,7 @@ pub async fn setup_command(
                     .title("読み上げ (Serenity)")
                     .field(
                         "VOICEVOXクレジット",
-                        format!("```\n{}\n```", voicevox_speakers.join("\n")),
+                        format!("```\n{}\n```", speakers.join("\n")),
                         false,
                     )
                     .field("設定コマンド", "`/config`", false)
@@ -176,6 +116,5 @@ pub async fn setup_command(
             ),
         )
         .await?;
-
     Ok(())
 }

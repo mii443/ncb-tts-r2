@@ -31,6 +31,30 @@ pub async fn set_server_config(ctx: &Context, guild_id: u64, config: ServerConfi
     Ok(())
 }
 
+pub async fn update_server_config<F>(
+    ctx: &Context,
+    guild_id: u64,
+    update: F,
+) -> Result<ServerConfig>
+where
+    F: Fn(&mut ServerConfig) -> Result<()>,
+{
+    get_database_client(ctx)
+        .await?
+        .update_server_config(guild_id, update)
+        .await
+}
+
+pub async fn update_user_config<F>(ctx: &Context, user_id: u64, update: F) -> Result<UserConfig>
+where
+    F: Fn(&mut UserConfig) -> Result<()>,
+{
+    get_database_client(ctx)
+        .await?
+        .update_user_config(user_id, update)
+        .await
+}
+
 pub async fn get_user_config(ctx: &Context, user_id: u64) -> Result<UserConfig> {
     let database = get_database_client(ctx).await?;
     database

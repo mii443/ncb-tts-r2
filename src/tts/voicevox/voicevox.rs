@@ -1,183 +1,205 @@
-use crate::{errors::NCBError, stream_input::Mp3Request};
+use std::fmt;
 
-use super::structs::{speaker::Speaker, stream::TTSResponse};
+use super::structs::speaker::Speaker;
+use crate::{
+    errors::{NCBError, Result},
+    stream_input::Mp3Request,
+    tts::http,
+};
 
-const BASE_API_URL: &str = "https://deprecatedapis.tts.quest/v2/";
+const BASE_API_URL: &str = "https://deprecatedapis.tts.quest/v2";
 const STREAM_API_URL: &str = "https://api.tts.quest/v3/voicevox/synthesis";
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct VOICEVOX {
-    pub key: Option<String>,
+    key: Option<String>,
     pub original_api_url: Option<String>,
+    client: reqwest::Client,
+    stream_api_url: String,
+}
+
+impl fmt::Debug for VOICEVOX {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VOICEVOX")
+            .field("has_api_key", &self.key.is_some())
+            .field("has_original_api", &self.original_api_url.is_some())
+            .finish()
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StreamResponse {
+    success: bool,
+    is_api_key_valid: Option<bool>,
+    mp3_streaming_url: Option<String>,
 }
 
 impl VOICEVOX {
-    #[tracing::instrument]
-    pub async fn get_styles(&self) -> Result<Vec<(String, i64)>, NCBError> {
-        let speakers = self.get_speaker_list().await?;
-        let mut speaker_list = Vec::new();
-        for speaker in speakers {
-            for style in speaker.styles {
-                speaker_list.push((format!("{} - {}", speaker.name, style.name), style.id))
-            }
-        }
-
-        Ok(speaker_list)
-    }
-
-    #[tracing::instrument]
-    pub async fn get_speakers(&self) -> Result<Vec<String>, NCBError> {
-        let speakers = self.get_speaker_list().await?;
-        let mut speaker_list = Vec::new();
-        for speaker in speakers {
-            speaker_list.push(speaker.name)
-        }
-
-        Ok(speaker_list)
-    }
-
-    pub fn new(key: Option<String>, original_api_url: Option<String>) -> Self {
-        Self {
+    pub fn new(key: Option<String>, original_api_url: Option<String>) -> Result<Self> {
+        Ok(Self {
             key,
             original_api_url,
-        }
+            client: http::client()?,
+            stream_api_url: STREAM_API_URL.into(),
+        })
     }
 
-    #[tracing::instrument]
-    async fn get_speaker_list(&self) -> Result<Vec<Speaker>, NCBError> {
-        let client = reqwest::Client::new();
-        let request = if let Some(key) = &self.key {
-            client
-                .get(format!("{}{}", BASE_API_URL, "voicevox/speakers/"))
+    #[tracing::instrument(skip_all)]
+    pub async fn get_styles(&self) -> Result<Vec<(String, i64)>> {
+        Ok(self
+            .get_speaker_list()
+            .await?
+            .into_iter()
+            .flat_map(|speaker| {
+                speaker
+                    .styles
+                    .into_iter()
+                    .map(move |style| (format!("{} - {}", speaker.name, style.name), style.id))
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub async fn get_speakers(&self) -> Result<Vec<String>> {
+        Ok(self
+            .get_speaker_list()
+            .await?
+            .into_iter()
+            .map(|speaker| speaker.name)
+            .collect())
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn get_speaker_list(&self) -> Result<Vec<Speaker>> {
+        let request = if let Some(url) = &self.original_api_url {
+            self.client
+                .get(format!("{}/speakers", url.trim_end_matches('/')))
+        } else if let Some(key) = &self.key {
+            self.client
+                .get(format!("{BASE_API_URL}/voicevox/speakers/"))
                 .query(&[("key", key)])
-        } else if let Some(original_api_url) = &self.original_api_url {
-            client.get(format!("{}/speakers", original_api_url))
         } else {
             return Err(NCBError::voicevox(
                 "No API key or original API URL provided",
             ));
         };
-
-        let response = request
-            .send()
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Failed to fetch speakers: {}", e)))?;
-
-        if !response.status().is_success() {
-            return Err(NCBError::voicevox(format!(
-                "API request failed with status: {}",
-                response.status()
-            )));
-        }
-
-        response
-            .json()
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Failed to parse speaker list: {}", e)))
+        http::json(
+            http::check_status(request.send().await?, "VOICEVOX")?,
+            "VOICEVOX",
+            "invalid speakers",
+        )
+        .await
     }
 
-    #[tracing::instrument]
-    pub async fn synthesize(&self, text: String, speaker: i64) -> Result<Vec<u8>, NCBError> {
+    #[tracing::instrument(skip_all)]
+    pub async fn synthesize(&self, text: String, speaker: i64) -> Result<Vec<u8>> {
         let key = self
             .key
             .as_ref()
             .ok_or_else(|| NCBError::voicevox("API key required for synthesis"))?;
-
-        let client = reqwest::Client::new();
-        let response = client
-            .post(format!("{}{}", BASE_API_URL, "voicevox/audio/"))
-            .query(&[
-                ("speaker", speaker.to_string()),
-                ("text", text),
-                ("key", key.clone()),
-            ])
-            .send()
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Synthesis request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            return Err(NCBError::voicevox(format!(
-                "Synthesis failed with status: {}",
-                response.status()
-            )));
-        }
-
-        let body = response
-            .bytes()
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Failed to read response body: {}", e)))?;
-
-        Ok(body.to_vec())
+        let response = http::check_status(
+            self.client
+                .post(format!("{BASE_API_URL}/voicevox/audio/"))
+                .query(&[
+                    ("speaker", speaker.to_string()),
+                    ("text", text),
+                    ("key", key.clone()),
+                ])
+                .send()
+                .await?,
+            "VOICEVOX",
+        )?;
+        Ok(response.bytes().await?.to_vec())
     }
 
-    #[tracing::instrument]
-    pub async fn synthesize_original(
-        &self,
-        text: String,
-        speaker: i64,
-    ) -> Result<Vec<u8>, NCBError> {
-        let api_url = self
+    #[tracing::instrument(skip_all)]
+    pub async fn synthesize_original(&self, text: String, speaker: i64) -> Result<Vec<u8>> {
+        let url = self
             .original_api_url
             .as_ref()
-            .ok_or_else(|| NCBError::voicevox("Original API URL required for synthesis"))?;
-
-        let client = voicevox_client::Client::new(api_url.clone(), None);
-        let audio_query = client
-            .create_audio_query(&text, speaker as i32, None)
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Failed to create audio query: {}", e)))?;
-
-        tracing::debug!(audio_query = ?audio_query.audio_query, "Generated audio query");
-
-        let audio = audio_query
-            .synthesis(speaker as i32, true)
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Audio synthesis failed: {}", e)))?;
-
-        Ok(audio.into())
+            .ok_or_else(|| NCBError::voicevox("Original API URL required for synthesis"))?
+            .trim_end_matches('/');
+        let response = http::check_status(
+            self.client
+                .post(format!("{url}/audio_query"))
+                .query(&[("text", text), ("speaker", speaker.to_string())])
+                .send()
+                .await?,
+            "VOICEVOX",
+        )?;
+        let query: serde_json::Value =
+            http::json(response, "VOICEVOX", "invalid audio query").await?;
+        let audio = http::check_status(
+            self.client
+                .post(format!("{url}/synthesis"))
+                .query(&[
+                    ("speaker", speaker.to_string()),
+                    ("enable_interrogative_upspeak", "true".into()),
+                ])
+                .json(&query)
+                .send()
+                .await?,
+            "VOICEVOX",
+        )?
+        .bytes()
+        .await?;
+        Ok(audio.to_vec())
     }
 
-    #[tracing::instrument]
-    pub async fn synthesize_stream(
-        &self,
-        text: String,
-        speaker: i64,
-    ) -> Result<Mp3Request, NCBError> {
+    #[tracing::instrument(skip_all)]
+    pub async fn synthesize_stream(&self, text: String, speaker: i64) -> Result<Mp3Request> {
         let key = self
             .key
             .as_ref()
             .ok_or_else(|| NCBError::voicevox("API key required for stream synthesis"))?;
-
-        let client = reqwest::Client::new();
-        let response = client
-            .post(STREAM_API_URL)
-            .query(&[
-                ("speaker", speaker.to_string()),
-                ("text", text),
-                ("key", key.clone()),
-            ])
-            .send()
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Stream synthesis request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            return Err(NCBError::voicevox(format!(
-                "Stream synthesis failed with status: {}",
-                response.status()
-            )));
+        let response = http::check_status(
+            self.client
+                .post(&self.stream_api_url)
+                .query(&[
+                    ("speaker", speaker.to_string()),
+                    ("text", text),
+                    ("key", key.clone()),
+                ])
+                .send()
+                .await?,
+            "VOICEVOX",
+        )?;
+        let response: StreamResponse =
+            http::json(response, "VOICEVOX", "invalid stream response").await?;
+        if !response.success || response.is_api_key_valid == Some(false) {
+            return Err(NCBError::ApiResponse {
+                service: "VOICEVOX",
+                reason: "stream synthesis rejected",
+            });
         }
+        let url = response
+            .mp3_streaming_url
+            .filter(|url| !url.is_empty())
+            .ok_or(NCBError::ApiResponse {
+                service: "VOICEVOX",
+                reason: "missing streaming URL",
+            })?;
+        let parsed = reqwest::Url::parse(&url).map_err(|_| NCBError::ApiResponse {
+            service: "VOICEVOX",
+            reason: "invalid streaming URL",
+        })?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return Err(NCBError::ApiResponse {
+                service: "VOICEVOX",
+                reason: "invalid streaming URL scheme",
+            });
+        }
+        Ok(Mp3Request::new(self.client.clone(), url))
+    }
 
-        let body = response
-            .text()
-            .await
-            .map_err(|e| NCBError::voicevox(format!("Failed to read response text: {}", e)))?;
-
-        let tts_response: TTSResponse = serde_json::from_str(&body)
-            .map_err(|e| NCBError::voicevox(format!("Failed to parse TTS response: {}", e)))?;
-
-        Ok(Mp3Request::new(
-            reqwest::Client::new(),
-            tts_response.mp3_streaming_url,
-        ))
+    #[cfg(test)]
+    pub(crate) fn for_test(stream_api_url: String, original_api_url: Option<String>) -> Self {
+        Self {
+            key: Some("test-secret-key".into()),
+            original_api_url,
+            client: http::client().unwrap(),
+            stream_api_url,
+        }
     }
 }

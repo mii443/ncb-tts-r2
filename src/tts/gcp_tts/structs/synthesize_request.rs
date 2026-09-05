@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 
 /// Example:
 /// ```rust
+/// use ncb_tts_r2::tts::gcp_tts::structs::{
+///     audio_config::AudioConfig, synthesis_input::SynthesisInput,
+///     synthesize_request::SynthesizeRequest, voice_selection_params::VoiceSelectionParams,
+/// };
+///
 /// SynthesizeRequest {
 ///     input: SynthesisInput {
 ///         text: None,
@@ -21,7 +26,7 @@ use serde::{Deserialize, Serialize};
 ///         speakingRate: 1.2f32,
 ///         pitch: 1.0f32
 ///     }
-/// }
+/// };
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]

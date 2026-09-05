@@ -19,9 +19,8 @@ pub async fn config_command(
     let config = data
         .database
         .get_user_config_or_default(command.user.id.get())
-        .await
-        .unwrap()
-        .unwrap();
+        .await?
+        .ok_or_else(|| crate::errors::NCBError::config("User config not found"))?;
 
     let tts_type = config
         .tts_type

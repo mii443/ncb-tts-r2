@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use serde::{Deserialize, Serialize};
 use serenity::{
     model::{
@@ -10,7 +8,6 @@ use serenity::{
 };
 
 use crate::data::UserData;
-use crate::tts::message::TTSMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TTSInstance {
@@ -59,105 +56,31 @@ impl TTSInstance {
     }
 
     pub async fn check_connection(&self, ctx: &Context) -> bool {
-        let manager = ctx.data::<UserData>().songbird.clone();
-
-        let call = manager.get(self.guild);
-        if let Some(call) = call {
-            if let Some(connection) = call.lock().await.current_connection() {
-                connection.channel_id.is_some()
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
-    pub async fn reconnect(
-        &self,
-        ctx: &Context,
-        _skip_check: bool,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let manager = ctx.data::<UserData>().songbird.clone();
-
-        if self.check_connection(ctx).await {
-            tracing::info!("Already connected to guild {}", self.guild);
-            return Ok(());
-        }
-
-        match manager.join(self.guild, self.voice_channel).await {
-            Ok(_) => {
-                tracing::info!(
-                    "Successfully reconnected to voice channel {} in guild {}",
-                    self.voice_channel,
-                    self.guild
-                );
-
-                match self.guild.channels(&ctx.http).await {
-                    Ok(channels) => {
-                        if let Some(channel) = channels.get(&self.voice_channel) {
-                            match channel.members(&ctx.cache) {
-                                Ok(members) => {
-                                    let user_count =
-                                        members.iter().filter(|member| !member.user.bot()).count();
-                                    if user_count == 0 {
-                                        tracing::info!("No users found in voice channel after reconnection, disconnecting from guild {}", self.guild);
-                                        let _ = manager.remove(self.guild).await;
-                                        return Err(
-                                            "No users in voice channel after reconnection".into()
-                                        );
-                                    }
-                                }
-                                Err(_) => {
-                                    tracing::warn!(
-                                        "Failed to verify members after reconnection for guild {}",
-                                        self.guild
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            "Failed to get channels after reconnection for guild {}",
-                            self.guild
-                        );
-                    }
-                }
-
-                Ok(())
-            }
-            Err(e) => {
-                tracing::error!("Failed to reconnect to voice channel: {}", e);
-                Err(Box::new(e))
-            }
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
-    pub async fn read<T>(&mut self, message: T, ctx: &Context)
-    where
-        T: TTSMessage + Debug,
-    {
-        let audio = message.synthesize(self, ctx).await;
-
-        {
-            let manager = ctx.data::<UserData>().songbird.clone();
-            let call = manager.get(self.guild).unwrap();
-            let mut call = call.lock().await;
-            for audio in audio {
-                call.enqueue(audio.into()).await;
-            }
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
-    pub async fn skip(&mut self, ctx: &Context) {
-        let manager = ctx.data::<UserData>().songbird.clone();
-        let call = manager.get(self.guild).unwrap();
+        let manager = &ctx.data::<UserData>().songbird;
+        let Some(call) = manager.get(self.guild) else {
+            return false;
+        };
         let call = call.lock().await;
-        let queue = call.queue();
-        let _ = queue.skip();
+        call.current_connection()
+            .and_then(|connection| connection.channel_id)
+            .is_some_and(|id| id.get() == self.voice_channel.get())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub async fn reconnect(&self, ctx: &Context, _skip_check: bool) -> crate::errors::Result<()> {
+        // Gateway connection info can survive a driver failure. Songbird's join
+        // also checks the driver and is a no-op when it is already connected.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            ctx.data::<UserData>()
+                .songbird
+                .join(self.guild, self.voice_channel),
+        )
+        .await
+        .map_err(|_| crate::errors::NCBError::Timeout {
+            operation: "Voice connection",
+        })?
+        .map_err(|_| crate::errors::NCBError::voice_connection("Failed to join voice channel"))?;
+        Ok(())
     }
 }

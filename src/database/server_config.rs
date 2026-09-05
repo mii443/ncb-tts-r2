@@ -14,3 +14,15 @@ pub struct ServerConfig {
     pub voice_state_announce: Option<bool>,
     pub read_username: Option<bool>,
 }
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            dictionary: Dictionary::new(),
+            autostart_channel_id: None,
+            autostart_text_channel_id: None,
+            voice_state_announce: Some(false),
+            read_username: Some(false),
+        }
+    }
+}

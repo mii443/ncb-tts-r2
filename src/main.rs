@@ -30,10 +30,8 @@ async fn run() -> Result<()> {
 
     let manager = songbird::Songbird::serenity();
 
-    let tts = GCPTTS::new("./credentials.json".to_string())
-        .await
-        .map_err(NCBError::GCPAuth)?;
-    let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url);
+    let tts = GCPTTS::new("./credentials.json".to_string()).await?;
+    let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url)?;
     let database_client = Database::new_with_url(config.redis_url).await?;
 
     let user_data = UserData {
@@ -41,6 +39,9 @@ async fn run() -> Result<()> {
         tts_data: Arc::new(RwLock::new(HashMap::default())),
         tts_client: Arc::new(TTS::new(voicevox, tts)),
         database: Arc::new(database_client),
+        monitor_started: std::sync::atomic::AtomicBool::new(false),
+        shutdown: tokio_util::sync::CancellationToken::new(),
+        setup_locks: std::sync::Mutex::new(HashMap::new()),
     };
 
     let token: Token = config
@@ -48,14 +49,20 @@ async fn run() -> Result<()> {
         .parse()
         .map_err(|_| NCBError::config("Invalid Discord token"))?;
 
+    let user_data = Arc::new(user_data);
     let mut client = Client::builder(token, GatewayIntents::all())
         .event_handler(Arc::new(Handler))
         .voice_manager(manager)
-        .data(Arc::new(user_data) as _)
+        .data(user_data.clone() as _)
         .await?;
 
     info!("Bot initialized.");
-    client.start().await?;
+    let result = client.start().await;
+    user_data.shutdown.cancel();
+    for session in user_data.tts_data.read().await.values() {
+        session.cancel();
+    }
+    result?;
     Ok(())
 }
 

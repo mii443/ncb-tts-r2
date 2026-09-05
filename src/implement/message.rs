@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use serenity::{model::prelude::Message, prelude::Context};
 use songbird::tracks::Track;
-use tracing::{error, warn};
 
 use crate::{
     data::UserData,
-    errors::{constants::*, validation},
+    database::dictionary::Dictionary,
+    errors::{constants::*, NCBError, Result},
     implement::member_name::ReadName,
     tts::{
         gcp_tts::structs::{
@@ -14,220 +14,144 @@ use crate::{
         },
         instance::TTSInstance,
         message::TTSMessage,
+        text::{bounded_text, SpeechText},
         tts_type::TTSType,
     },
-    utils::{get_cached_regex, retry_with_backoff},
+    utils::get_cached_regex,
 };
+
+fn apply_dictionary(text: &str, dictionary: &Dictionary) -> String {
+    let mut text = bounded_text(text);
+    for rule in &dictionary.rules {
+        let replaced = if rule.is_regex {
+            match get_cached_regex(&rule.rule) {
+                Ok(regex) => regex.replace_all(&text, rule.to.as_str()).into_owned(),
+                Err(_) => {
+                    tracing::warn!("Skipping invalid dictionary regex");
+                    continue;
+                }
+            }
+        } else {
+            text.replace(&rule.rule, &rule.to)
+        };
+        // Bound every expansion, including the input passed to the next rule.
+        text = bounded_text(&replaced);
+    }
+    text
+}
 
 #[async_trait]
 impl TTSMessage for Message {
-    async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String {
-        let data = ctx.data::<UserData>();
-
-        let config = {
-            match data
-                .database
-                .get_server_config_or_default(instance.guild.get())
-                .await
-            {
-                Ok(Some(config)) => config,
-                Ok(None) => {
-                    error!(guild_id = %instance.guild, "No server config available");
-                    return self.content.to_string();
-                }
-                Err(e) => {
-                    error!(guild_id = %instance.guild, error = %e, "Failed to get server config");
-                    return self.content.to_string();
-                }
-            }
-        };
-        let mut text = self.content.to_string();
-
-        if let Err(e) = validation::validate_tts_text(&text) {
-            warn!(error = %e, "Invalid TTS text, using truncated version");
-            text.truncate(crate::errors::constants::MAX_TTS_TEXT_LENGTH);
+    async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> Result<SpeechText> {
+        let config = ctx
+            .data::<UserData>()
+            .database
+            .get_server_config_or_default(instance.guild.get())
+            .await?
+            .ok_or_else(|| NCBError::config("Server config not found"))?;
+        let body = apply_dictionary(&self.content, &config.dictionary);
+        let mut text = SpeechText::default();
+        let same_author = instance
+            .before_message
+            .as_ref()
+            .is_some_and(|before| before.author.id == self.author.id);
+        if !same_author && config.read_username.unwrap_or(true) {
+            let name = self
+                .member
+                .as_ref()
+                .and_then(|member| member.nick.as_ref())
+                .map(|nick| nick.to_string())
+                .unwrap_or_else(|| self.author.read_name());
+            text.push_text(&format!("{name}さんの発言"));
+            text.pause();
         }
-
-        for rule in config.dictionary.rules {
-            if rule.is_regex {
-                match get_cached_regex(&rule.rule) {
-                    Ok(regex) => {
-                        text = regex.replace_all(&text, &rule.to).to_string();
-                    }
-                    Err(e) => {
-                        warn!(
-                            rule_id = rule.id,
-                            pattern = rule.rule,
-                            error = %e,
-                            "Skipping invalid regex rule"
-                        );
-                        continue;
-                    }
-                }
-            } else {
-                text = text.replace(&rule.rule, &rule.to);
-            }
+        text.push_text(&body);
+        if !self.attachments.is_empty() {
+            text.pause();
+            text.push_text(&format!("{}個の添付ファイル", self.attachments.len()));
         }
-        let mut res = if let Some(before_message) = &instance.before_message {
-            if before_message.author.id == self.author.id {
-                text.clone()
-            } else {
-                let name = get_user_name(self, ctx).await;
-                if config.read_username.unwrap_or(true) {
-                    format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
-                } else {
-                    format!("{}", text)
-                }
-            }
-        } else {
-            let name = get_user_name(self, ctx).await;
-
-            if config.read_username.unwrap_or(true) {
-                format!("{}さんの発言<break time=\"200ms\"/>{}", name, text)
-            } else {
-                format!("{}", text)
-            }
-        };
-
-        if self.attachments.len() > 0 {
-            res = format!(
-                "{}<break time=\"200ms\"/>{}個の添付ファイル",
-                res,
-                self.attachments.len()
-            );
-        }
-
         instance.before_message = Some(self.clone());
-
-        res
+        Ok(text)
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
-        let text = self.parse(instance, ctx).await;
-
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Result<Vec<Track>> {
+        let text = self.parse(instance, ctx).await?;
+        if text.plain().trim().is_empty() {
+            return Ok(vec![]);
+        }
         let data = ctx.data::<UserData>();
-
-        let config = {
-            match data
-                .database
-                .get_user_config_or_default(self.author.id.get())
-                .await
-            {
-                Ok(Some(config)) => config,
-                Ok(None) | Err(_) => {
-                    error!(user_id = %self.author.id, "Failed to get user config, using defaults");
-                    crate::database::user_config::UserConfig {
-                        tts_type: Some(TTSType::GCP),
-                        gcp_tts_voice: Some(crate::tts::gcp_tts::structs::voice_selection_params::VoiceSelectionParams {
-                            languageCode: String::from("ja-JP"),
-                            name: String::from("ja-JP-Wavenet-B"),
-                            ssmlGender: String::from("neutral"),
-                        }),
-                        voicevox_speaker: Some(crate::errors::constants::DEFAULT_VOICEVOX_SPEAKER),
-                    }
-                }
-            }
-        };
-
+        let config = data
+            .database
+            .get_user_config_or_default(self.author.id.get())
+            .await?
+            .ok_or_else(|| NCBError::config("User config not found"))?;
         let tts = &data.tts_client;
-
-        let tts_type = config
+        let track = match config
             .tts_type
             .unwrap_or(TTSType::GCP)
-            .available_or_default();
-
-        let synthesis_result = match tts_type {
+            .available_or_default()
+        {
             TTSType::GCP => {
-                let sanitized_text = validation::sanitize_ssml(&text);
-                retry_with_backoff(
-                    || {
-                        tts.synthesize_gcp(SynthesizeRequest {
-                            input: SynthesisInput {
-                                text: None,
-                                ssml: Some(format!("<speak>{}</speak>", sanitized_text)),
-                            },
-                            voice: config.gcp_tts_voice.clone().unwrap_or_else(|| {
-                                crate::tts::gcp_tts::structs::voice_selection_params::VoiceSelectionParams {
-                                    languageCode: String::from("ja-JP"),
-                                    name: String::from("ja-JP-Wavenet-B"),
-                                    ssmlGender: String::from("neutral"),
-                                }
-                            }),
-                            audioConfig: AudioConfig {
-                                audioEncoding: String::from("mp3"),
-                                speakingRate: DEFAULT_SPEAKING_RATE,
-                                pitch: DEFAULT_PITCH,
-                            },
-                        })
+                tts.synthesize_gcp(SynthesizeRequest {
+                    input: SynthesisInput {
+                        text: None,
+                        ssml: Some(text.ssml()),
                     },
-                    3,
-                    std::time::Duration::from_millis(500),
-                ).await
+                    voice: config.gcp_tts_voice.unwrap_or_else(|| {
+                        crate::tts::gcp_tts::structs::voice_selection_params::VoiceSelectionParams {
+                            languageCode: "ja-JP".into(),
+                            name: "ja-JP-Wavenet-B".into(),
+                            ssmlGender: "neutral".into(),
+                        }
+                    }),
+                    audioConfig: AudioConfig {
+                        audioEncoding: "mp3".into(),
+                        speakingRate: DEFAULT_SPEAKING_RATE,
+                        pitch: DEFAULT_PITCH,
+                    },
+                })
+                .await?
             }
             TTSType::VOICEVOX => {
-                let processed_text = text.replace("<break time=\"200ms\"/>", "、");
-                retry_with_backoff(
-                    || {
-                        tts.synthesize_voicevox(
-                            &processed_text,
-                            config
-                                .voicevox_speaker
-                                .unwrap_or(crate::errors::constants::DEFAULT_VOICEVOX_SPEAKER),
-                        )
-                    },
-                    3,
-                    std::time::Duration::from_millis(500),
+                tts.synthesize_voicevox(
+                    &text.plain(),
+                    config.voicevox_speaker.unwrap_or(DEFAULT_VOICEVOX_SPEAKER),
                 )
-                .await
+                .await?
             }
             #[cfg(toriel_voice)]
-            TTSType::TORIEL => {
-                let processed_text = text.replace("<break time=\"200ms\"/>", ",");
-                retry_with_backoff(
-                    || tts.synthesize_toriel(&processed_text),
-                    3,
-                    std::time::Duration::from_millis(500),
-                )
-                .await
-            }
+            TTSType::TORIEL => tts.synthesize_toriel(&text.plain()).await?,
             #[cfg(not(toriel_voice))]
-            TTSType::TORIEL => unreachable!("unavailable TTS engines fall back to GCP"),
+            TTSType::TORIEL => unreachable!("unavailable engines fall back to GCP"),
         };
-
-        match synthesis_result {
-            Ok(track) => vec![track],
-            Err(e) => {
-                error!(error = %e, "TTS synthesis failed");
-                vec![]
-            }
-        }
+        Ok(vec![track])
     }
 }
 
-async fn get_user_name(message: &Message, ctx: &Context) -> String {
-    let member = message.member.clone();
-    if let Some(_) = member {
-        if let Some(guild_id) = message.guild_id {
-            match guild_id.member(&ctx.http, message.author.id).await {
-                Ok(member) => member.read_name(),
-                Err(e) => {
-                    warn!(
-                        user_id = %message.author.id,
-                        guild_id = ?message.guild_id,
-                        error = %e,
-                        "Failed to get guild member, using fallback name"
-                    );
-                    message.author.read_name()
-                }
-            }
-        } else {
-            warn!(
-                guild_id = ?message.guild_id,
-                "Guild not found in cache, using author name"
-            );
-            message.author.read_name()
-        }
-    } else {
-        message.author.read_name()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::dictionary::Rule;
+
+    #[test]
+    fn dictionary_expansion_is_bounded_after_each_rule() {
+        let dictionary = Dictionary {
+            rules: vec![
+                Rule {
+                    id: "expand".into(),
+                    is_regex: false,
+                    rule: "あ".into(),
+                    to: "🙂".repeat(500),
+                },
+                Rule {
+                    id: "again".into(),
+                    is_regex: true,
+                    rule: "🙂".into(),
+                    to: "あ".repeat(500),
+                },
+            ],
+        };
+        let result = apply_dictionary(&"あ".repeat(167), &dictionary);
+        assert_eq!(result, "あ".repeat(MAX_TTS_TEXT_LENGTH));
     }
 }

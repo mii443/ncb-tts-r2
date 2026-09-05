@@ -50,21 +50,32 @@ impl Handler {
             NCBError::InvalidInput(msg) => format!("入力エラー: {}", msg),
             NCBError::Database(_) => "データベースエラーが発生しました".to_string(),
             NCBError::Config(msg) => format!("設定エラー: {}", msg),
+            NCBError::UserNotInVoiceChannel => {
+                "ボイスチャンネルに参加してから実行してください。".to_string()
+            }
+            NCBError::GuildNotFound => "このコマンドはサーバーでのみ使用可能です。".to_string(),
             _ => "予期しないエラーが発生しました".to_string(),
         };
 
         match interaction {
             Interaction::Command(cmd) => {
-                cmd.create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content(error_message)
-                            .ephemeral(true),
-                    ),
-                )
-                .await
-                .map_err(|e| NCBError::Discord(e))?;
+                let result = cmd
+                    .create_response(
+                        &ctx.http,
+                        CreateInteractionResponse::Message(
+                            CreateInteractionResponseMessage::new()
+                                .content(error_message.clone())
+                                .ephemeral(true),
+                        ),
+                    )
+                    .await;
+                if result.is_err() {
+                    cmd.edit_response(
+                        &ctx.http,
+                        serenity::all::EditInteractionResponse::new().content(error_message),
+                    )
+                    .await?;
+                }
             }
             Interaction::Component(comp) => {
                 comp.create_response(

@@ -1,80 +1,36 @@
+use crate::{
+    errors::{NCBError, Result},
+    tts::session::get_session,
+};
 use serenity::{
     all::{CommandInteraction, CreateInteractionResponse, CreateInteractionResponseMessage},
-    model::prelude::UserId,
     prelude::Context,
 };
 
-use crate::data::UserData;
-
-pub async fn skip_command(
-    ctx: &Context,
-    command: &CommandInteraction,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if command.guild_id.is_none() {
-        command
-            .create_response(
-                &ctx.http,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .content("このコマンドはサーバーでのみ使用可能です．")
-                        .ephemeral(true),
-                ),
-            )
-            .await?;
-        return Ok(());
-    }
-
-    let guild_id = command.guild_id.unwrap();
-    let guild = guild_id.to_guild_cached(&ctx.cache).unwrap().clone();
-
-    let channel_id = guild
-        .voice_states
-        .get(&UserId::from(command.user.id.get()))
-        .and_then(|state| state.channel_id);
-
-    if channel_id.is_none() {
-        command
-            .create_response(
-                &ctx.http,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .content("ボイスチャンネルに参加してから実行してください．")
-                        .ephemeral(true),
-                ),
-            )
-            .await?;
-        return Ok(());
-    }
-
-    let storage_lock = ctx.data::<UserData>().tts_data.clone();
-
+pub async fn skip_command(ctx: &Context, command: &CommandInteraction) -> Result<()> {
+    let guild_id = command.guild_id.ok_or(NCBError::GuildNotFound)?;
     {
-        let mut storage = storage_lock.write().await;
-        if !storage.contains_key(&guild.id) {
-            command
-                .create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content("読み上げしていません")
-                            .ephemeral(true),
-                    ),
-                )
-                .await?;
-            return Ok(());
-        }
-
-        storage.get_mut(&guild.id).unwrap().skip(ctx).await;
+        let guild = ctx.cache.guild(guild_id).ok_or(NCBError::GuildNotFound)?;
+        guild
+            .voice_states
+            .get(&command.user.id)
+            .and_then(|state| state.channel_id)
+            .ok_or(NCBError::UserNotInVoiceChannel)?;
     }
-
+    let session = get_session(ctx, guild_id).await;
+    let response = if let Some(session) = session {
+        session.skip();
+        "スキップしました"
+    } else {
+        "読み上げしていません"
+    };
     command
         .create_response(
             &ctx.http,
             CreateInteractionResponse::Message(
-                CreateInteractionResponseMessage::new().content("スキップしました"),
+                CreateInteractionResponseMessage::new().content(response),
             ),
         )
         .await?;
-
     Ok(())
 }

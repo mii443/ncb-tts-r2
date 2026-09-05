@@ -2,18 +2,20 @@ use async_trait::async_trait;
 use serenity::prelude::Context;
 use songbird::tracks::Track;
 
-use crate::{data::UserData, tts::instance::TTSInstance};
-
 use super::gcp_tts::structs::{
     audio_config::AudioConfig, synthesis_input::SynthesisInput,
     synthesize_request::SynthesizeRequest, voice_selection_params::VoiceSelectionParams,
 };
+use crate::{
+    data::UserData,
+    errors::Result,
+    tts::{instance::TTSInstance, text::SpeechText},
+};
 
-/// Message trait that can be used to synthesize text to speech.
 #[async_trait]
-pub trait TTSMessage {
-    async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> String;
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track>;
+pub trait TTSMessage: Send + Sync + std::fmt::Debug {
+    async fn parse(&self, instance: &mut TTSInstance, ctx: &Context) -> Result<SpeechText>;
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Result<Vec<Track>>;
 }
 
 #[derive(Debug, Clone)]
@@ -23,39 +25,37 @@ pub struct AnnounceMessage {
 
 #[async_trait]
 impl TTSMessage for AnnounceMessage {
-    async fn parse(&self, instance: &mut TTSInstance, _ctx: &Context) -> String {
+    async fn parse(&self, instance: &mut TTSInstance, _ctx: &Context) -> Result<SpeechText> {
         instance.before_message = None;
-        format!(
-            r#"<speak>アナウンス<break time="200ms"/>{}</speak>"#,
-            self.message
-        )
+        let mut text = SpeechText::default();
+        text.push_text("アナウンス");
+        text.pause();
+        text.push_text(&self.message);
+        Ok(text)
     }
 
-    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Vec<Track> {
-        let text = self.parse(instance, ctx).await;
-        let data = ctx.data::<UserData>();
-        let tts = &data.tts_client;
-
-        let audio = tts
+    async fn synthesize(&self, instance: &mut TTSInstance, ctx: &Context) -> Result<Vec<Track>> {
+        let text = self.parse(instance, ctx).await?;
+        let audio = ctx
+            .data::<UserData>()
+            .tts_client
             .synthesize_gcp(SynthesizeRequest {
                 input: SynthesisInput {
                     text: None,
-                    ssml: Some(text),
+                    ssml: Some(text.ssml()),
                 },
                 voice: VoiceSelectionParams {
-                    languageCode: String::from("ja-JP"),
-                    name: String::from("ja-JP-Wavenet-B"),
-                    ssmlGender: String::from("neutral"),
+                    languageCode: "ja-JP".into(),
+                    name: "ja-JP-Wavenet-B".into(),
+                    ssmlGender: "neutral".into(),
                 },
                 audioConfig: AudioConfig {
-                    audioEncoding: String::from("mp3"),
-                    speakingRate: 1.2f32,
-                    pitch: 1.0f32,
+                    audioEncoding: "mp3".into(),
+                    speakingRate: 1.2,
+                    pitch: 1.0,
                 },
             })
-            .await
-            .unwrap();
-
-        vec![audio.into()]
+            .await?;
+        Ok(vec![audio])
     }
 }

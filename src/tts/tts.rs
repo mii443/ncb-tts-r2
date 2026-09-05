@@ -4,13 +4,13 @@ use std::{num::NonZeroUsize, sync::Arc};
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use songbird::{driver::Bitrate, input::cached::Compressed, tracks::Track};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 #[cfg(toriel_voice)]
 use crate::tts::toriel::toriel::TorielTTS;
 use crate::{
     errors::{constants::*, NCBError, Result},
-    utils::{retry_with_backoff, CircuitBreaker, PerformanceMetrics},
+    utils::{CircuitBreaker, PerformanceMetrics},
 };
 
 use super::{
@@ -34,7 +34,14 @@ pub struct TTS {
     voicevox_circuit_breaker: Arc<RwLock<CircuitBreaker>>,
     gcp_circuit_breaker: Arc<RwLock<CircuitBreaker>>,
     metrics: Arc<PerformanceMetrics>,
+    voicevox_slots: tokio::sync::Semaphore,
+    gcp_slots: tokio::sync::Semaphore,
     cache_persistence_path: Option<String>,
+}
+
+enum VoicevoxAudio {
+    Bytes(Vec<u8>),
+    Stream(crate::stream_input::Mp3Request),
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
@@ -64,6 +71,8 @@ impl TTS {
             voicevox_circuit_breaker: Arc::new(RwLock::new(CircuitBreaker::default())),
             gcp_circuit_breaker: Arc::new(RwLock::new(CircuitBreaker::default())),
             metrics: Arc::new(PerformanceMetrics::new()),
+            voicevox_slots: tokio::sync::Semaphore::new(4),
+            gcp_slots: tokio::sync::Semaphore::new(4),
             cache_persistence_path: Some("./tts_cache.bin".to_string()),
         };
 
@@ -80,226 +89,137 @@ impl TTS {
         self
     }
 
-    #[instrument(skip(self))]
-    pub async fn synthesize_voicevox(
-        &self,
-        text: &str,
-        speaker: i64,
-    ) -> std::result::Result<Track, NCBError> {
+    #[instrument(skip_all)]
+    pub async fn synthesize_voicevox(&self, text: &str, speaker: i64) -> Result<Track> {
         self.metrics.increment_tts_requests();
-        let cache_key = CacheKey::Voicevox(text.to_string(), speaker);
-
-        let cached_audio = {
-            let mut cache_guard = self.cache.write().unwrap();
-            cache_guard.get(&cache_key).map(|audio| audio.new_handle())
-        };
-
-        if let Some(audio) = cached_audio {
-            debug!("Cache hit for VOICEVOX TTS");
+        let key = CacheKey::Voicevox(text.to_owned(), speaker);
+        if let Some(audio) = self
+            .cache
+            .write()
+            .unwrap()
+            .get(&key)
+            .map(|audio| audio.new_handle())
+        {
             self.metrics.increment_tts_cache_hits();
             return Ok(audio.into());
         }
-
-        debug!("Cache miss for VOICEVOX TTS");
         self.metrics.increment_tts_cache_misses();
-
-        // Check circuit breaker
+        let _permit = self
+            .voicevox_slots
+            .acquire()
+            .await
+            .map_err(|_| NCBError::SessionStopped)?;
         {
-            let mut circuit_breaker = self.voicevox_circuit_breaker.write().unwrap();
-            circuit_breaker.try_half_open();
-
-            if !circuit_breaker.can_execute() {
+            let mut breaker = self.voicevox_circuit_breaker.write().unwrap();
+            breaker.try_half_open();
+            if !breaker.can_execute() {
                 return Err(NCBError::voicevox("Circuit breaker is open"));
             }
         }
 
-        let synthesis_result = if self.voicevox_client.original_api_url.is_some() {
-            retry_with_backoff(
-                || async {
-                    match self
-                        .voicevox_client
-                        .synthesize_original(text.to_string(), speaker)
-                        .await
-                    {
-                        Ok(audio) => Ok(audio),
-                        Err(e) => Err(NCBError::voicevox(format!(
-                            "VOICEVOX synthesis failed: {}",
-                            e
-                        ))),
-                    }
-                },
-                3,
-                std::time::Duration::from_millis(500),
-            )
-            .await
-        } else {
-            retry_with_backoff(
-                || async {
-                    match self
-                        .voicevox_client
-                        .synthesize_stream(text.to_string(), speaker)
-                        .await
-                    {
-                        Ok(_mp3_request) => Err(NCBError::voicevox(
-                            "Stream synthesis not yet fully implemented",
-                        )),
-                        Err(e) => Err(NCBError::voicevox(format!(
-                            "VOICEVOX synthesis failed: {}",
-                            e
-                        ))),
-                    }
-                },
-                3,
-                std::time::Duration::from_millis(500),
-            )
-            .await
-        };
-
-        match synthesis_result {
-            Ok(audio) => {
-                // Update circuit breaker on success
-                let mut circuit_breaker = self.voicevox_circuit_breaker.write().unwrap();
-                circuit_breaker.on_success();
-                drop(circuit_breaker);
-
-                // Cache the audio asynchronously
-                let cache = self.cache.clone();
-                let cache_key_clone = cache_key.clone();
-                let audio_for_cache = audio.clone();
-                tokio::spawn(async move {
-                    debug!("Compressing and caching VOICEVOX audio");
-                    if let Ok(compressed) =
-                        Compressed::new(audio_for_cache.into(), Bitrate::Auto).await
-                    {
-                        let mut cache_guard = cache.write().unwrap();
-                        cache_guard.put(cache_key_clone, compressed);
-                    }
-                });
-
-                Ok(audio.into())
+        let result = super::http::retry_synthesis(|| async {
+            if self.voicevox_client.original_api_url.is_some() {
+                self.voicevox_client
+                    .synthesize_original(text.to_owned(), speaker)
+                    .await
+                    .map(VoicevoxAudio::Bytes)
+            } else {
+                self.voicevox_client
+                    .synthesize_stream(text.to_owned(), speaker)
+                    .await
+                    .map(VoicevoxAudio::Stream)
             }
-            Err(e) => {
-                // Update circuit breaker on failure
-                let mut circuit_breaker = self.voicevox_circuit_breaker.write().unwrap();
-                circuit_breaker.on_failure();
-                drop(circuit_breaker);
-
-                error!(error = %e, "VOICEVOX synthesis failed");
-                Err(e)
+        })
+        .await;
+        match result {
+            Ok(audio) => {
+                self.voicevox_circuit_breaker.write().unwrap().on_success();
+                match audio {
+                    VoicevoxAudio::Stream(request) => {
+                        Ok(songbird::input::Input::from(request).into())
+                    }
+                    VoicevoxAudio::Bytes(audio) => self.cache_audio(key, audio).await,
+                }
+            }
+            Err(error) => {
+                if error.is_retryable() {
+                    self.voicevox_circuit_breaker.write().unwrap().on_failure();
+                }
+                Err(error)
             }
         }
     }
 
-    pub async fn synthesize_gcp(
-        &self,
-        synthesize_request: SynthesizeRequest,
-    ) -> std::result::Result<Track, NCBError> {
+    #[instrument(skip_all)]
+    pub async fn synthesize_gcp(&self, request: SynthesizeRequest) -> Result<Track> {
         self.metrics.increment_tts_requests();
-        let cache_key = CacheKey::GCP(
-            synthesize_request.input.clone(),
-            synthesize_request.voice.clone(),
-        );
-
-        let cached_audio = {
-            let mut cache_guard = self.cache.write().unwrap();
-            cache_guard.get(&cache_key).map(|audio| audio.new_handle())
-        };
-
-        if let Some(audio) = cached_audio {
-            debug!("Cache hit for GCP TTS");
+        let key = CacheKey::GCP(request.input.clone(), request.voice.clone());
+        if let Some(audio) = self
+            .cache
+            .write()
+            .unwrap()
+            .get(&key)
+            .map(|audio| audio.new_handle())
+        {
             self.metrics.increment_tts_cache_hits();
             return Ok(audio.into());
         }
-
-        debug!("Cache miss for GCP TTS");
         self.metrics.increment_tts_cache_misses();
-
-        // Check circuit breaker
+        let _permit = self
+            .gcp_slots
+            .acquire()
+            .await
+            .map_err(|_| NCBError::SessionStopped)?;
         {
-            let mut circuit_breaker = self.gcp_circuit_breaker.write().unwrap();
-            circuit_breaker.try_half_open();
-
-            if !circuit_breaker.can_execute() {
-                return Err(NCBError::tts_synthesis("GCP TTS circuit breaker is open"));
+            let mut breaker = self.gcp_circuit_breaker.write().unwrap();
+            breaker.try_half_open();
+            if !breaker.can_execute() {
+                return Err(NCBError::tts_synthesis("GCP circuit breaker is open"));
             }
         }
-
-        let request_clone = SynthesizeRequest {
-            input: synthesize_request.input.clone(),
-            voice: synthesize_request.voice.clone(),
-            audioConfig: synthesize_request.audioConfig.clone(),
-        };
-
-        let audio = {
-            let audio_result = retry_with_backoff(
-                || async {
-                    match self.gcp_tts_client.synthesize(request_clone.clone()).await {
-                        Ok(audio) => Ok(audio),
-                        Err(e) => Err(NCBError::tts_synthesis(format!(
-                            "GCP TTS synthesis failed: {}",
-                            e
-                        ))),
-                    }
-                },
-                3,
-                std::time::Duration::from_millis(500),
-            )
-            .await;
-
-            match audio_result {
-                Ok(audio) => audio,
-                Err(e) => {
-                    // Update circuit breaker on failure
-                    let mut circuit_breaker = self.gcp_circuit_breaker.write().unwrap();
-                    circuit_breaker.on_failure();
-                    drop(circuit_breaker);
-
-                    error!(error = %e, "GCP TTS synthesis failed");
-                    return Err(e);
+        let result =
+            super::http::retry_synthesis(|| self.gcp_tts_client.synthesize(request.clone())).await;
+        let audio = match result {
+            Ok(audio) => {
+                self.gcp_circuit_breaker.write().unwrap().on_success();
+                audio
+            }
+            Err(error) => {
+                if error.is_retryable() {
+                    self.gcp_circuit_breaker.write().unwrap().on_failure();
                 }
+                return Err(error);
             }
         };
-
-        // Update circuit breaker on success
-        {
-            let mut circuit_breaker = self.gcp_circuit_breaker.write().unwrap();
-            circuit_breaker.on_success();
-        }
-
-        match Compressed::new(audio.into(), Bitrate::Auto).await {
-            Ok(compressed) => {
-                // Cache the compressed audio
-                {
-                    let mut cache_guard = self.cache.write().unwrap();
-                    cache_guard.put(cache_key, compressed.clone());
+        let track = self.cache_audio(key, audio).await?;
+        if let Some(path) = &self.cache_persistence_path {
+            let cache = self.cache.clone();
+            let path = path.clone();
+            tokio::task::spawn_blocking(move || {
+                if let Err(error) = Self::persist_cache_to_file(&cache, &path) {
+                    warn!(error = %error, "Failed to persist cache");
                 }
-
-                // Persist cache asynchronously
-                if let Some(path) = &self.cache_persistence_path {
-                    let cache_clone = self.cache.clone();
-                    let path_clone = path.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = Self::persist_cache_to_file(&cache_clone, &path_clone) {
-                            warn!(error = %e, "Failed to persist cache");
-                        }
-                    });
-                }
-
-                Ok(compressed.into())
-            }
-            Err(e) => {
-                error!(error = %e, "Failed to compress GCP audio");
-                Err(NCBError::tts_synthesis(format!(
-                    "Audio compression failed: {}",
-                    e
-                )))
-            }
+            });
         }
+        Ok(track)
+    }
+
+    async fn cache_audio(&self, key: CacheKey, audio: Vec<u8>) -> Result<Track> {
+        let compressed = Compressed::new(audio.into(), Bitrate::Auto)
+            .await
+            .map_err(|_| NCBError::tts_synthesis("Failed to compress audio"))?;
+        self.cache.write().unwrap().put(key, compressed.clone());
+        Ok(compressed.into())
     }
 
     #[cfg(toriel_voice)]
-    pub async fn synthesize_toriel(&self, text: &str) -> std::result::Result<Track, NCBError> {
-        let audio = self.toriel_tts_client.synthesize(text).unwrap();
+    pub async fn synthesize_toriel(&self, text: &str) -> Result<Track> {
+        let client = self.toriel_tts_client.clone();
+        let text = text.to_owned();
+        let audio = tokio::task::spawn_blocking(move || client.synthesize(&text))
+            .await
+            .map_err(|_| NCBError::tts_synthesis("Toriel worker failed"))?
+            .map_err(|_| NCBError::tts_synthesis("Toriel synthesis failed"))?;
         Ok(Track::from(audio))
     }
 

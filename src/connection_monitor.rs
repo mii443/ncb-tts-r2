@@ -1,234 +1,170 @@
-use serenity::{
-    all::{CreateEmbed, CreateMessage},
-    prelude::Context,
+use futures::{stream, StreamExt};
+use serenity::{model::id::GuildId, prelude::Context};
+use std::{collections::HashMap, sync::atomic::Ordering, sync::Arc, time::Duration};
+use tokio::time::{Instant, MissedTickBehavior};
+
+use crate::{
+    data::UserData,
+    errors::{constants::CONNECTION_CHECK_INTERVAL_SECS, Result},
+    tts::session::{voice_presence, TTSSession, VoicePresence},
 };
-use std::time::Duration;
-use tokio::time;
-use tracing::{error, info, instrument, warn};
 
-use crate::data::UserData;
-
-const CONNECTION_CHECK_INTERVAL_SECS: u64 = 5;
-const MAX_RECONNECTION_ATTEMPTS: u32 = 3;
-const RECONNECTION_BACKOFF_SECS: u64 = 2;
-
-#[derive(Debug, thiserror::Error)]
-pub enum ConnectionMonitorError {
-    #[error("Failed to get songbird manager")]
-    SongbirdManagerNotFound,
-    #[error("Failed to check voice channel users: {0}")]
-    VoiceChannelCheck(String),
-    #[error("Failed to reconnect after {attempts} attempts")]
-    ReconnectionFailed { attempts: u32 },
-    #[error("Database operation failed: {0}")]
-    Database(#[from] redis::RedisError),
-}
-
-type Result<T> = std::result::Result<T, ConnectionMonitorError>;
-
+#[derive(Default)]
 pub struct ConnectionMonitor {
-    reconnection_attempts: std::collections::HashMap<serenity::model::id::GuildId, u32>,
+    retries: HashMap<GuildId, RetryState>,
+    restored: bool,
 }
 
-impl Default for ConnectionMonitor {
-    fn default() -> Self {
-        Self::new()
+struct RetryState {
+    failures: u32,
+    next_attempt: Instant,
+}
+
+impl RetryState {
+    fn failed(previous: Option<Self>) -> Self {
+        let failures = previous.map_or(1, |retry| retry.failures.saturating_add(1));
+        let seconds = (2u64.saturating_pow(failures.min(6))).min(60);
+        Self {
+            failures,
+            next_attempt: Instant::now() + Duration::from_secs(seconds),
+        }
     }
 }
 
 impl ConnectionMonitor {
     pub fn new() -> Self {
-        Self {
-            reconnection_attempts: std::collections::HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn start(ctx: Context) {
+        let data = ctx.data::<UserData>();
+        if data.monitor_started.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let shutdown = data.shutdown.clone();
         tokio::spawn(async move {
-            let mut monitor = ConnectionMonitor::new();
-            info!(
-                interval_secs = CONNECTION_CHECK_INTERVAL_SECS,
-                "Starting connection monitor"
-            );
-            let mut interval = time::interval(Duration::from_secs(CONNECTION_CHECK_INTERVAL_SECS));
-
+            let mut monitor = Self::new();
+            let mut interval =
+                tokio::time::interval(Duration::from_secs(CONNECTION_CHECK_INTERVAL_SECS));
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
             loop {
-                interval.tick().await;
-                if let Err(e) = monitor.check_connections(&ctx).await {
-                    error!(error = %e, "Connection monitoring failed");
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => break,
+                    _ = interval.tick() => {},
+                }
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => break,
+                    _ = monitor.check_connections(&ctx) => {},
                 }
             }
         });
     }
 
-    #[instrument(skip(self, ctx))]
-    async fn check_connections(&mut self, ctx: &Context) -> Result<()> {
+    async fn restore(&mut self, ctx: &Context) -> Result<()> {
         let data = ctx.data::<UserData>();
-        let storage_lock = data.tts_data.clone();
-        let database = data.database.clone();
-        let manager = data.songbird.clone();
-
-        let mut storage = storage_lock.write().await;
-        let mut guilds_to_remove = Vec::new();
-
-        for (guild_id, instance) in storage.iter() {
-            let call = manager.get(*guild_id);
-            let is_connected = if let Some(call) = call {
-                if let Some(connection) = call.lock().await.current_connection() {
-                    connection.channel_id.is_some()
-                } else {
-                    false
+        let mut failure = None;
+        for id in data.database.list_active_instances().await? {
+            if id == 0 {
+                failure = Some(crate::errors::NCBError::database("Invalid saved guild ID"));
+                continue;
+            }
+            let guild = GuildId::new(id);
+            let _guard = data.setup_guard(guild).await;
+            if data.tts_data.read().await.contains_key(&guild) {
+                continue;
+            }
+            // Load under the same per-guild guard as stop, so a stale snapshot
+            // cannot recreate a session after its saved state has been deleted.
+            match data.database.load_tts_instance(guild).await {
+                Ok(Some(instance)) => {
+                    data.tts_data
+                        .write()
+                        .await
+                        .insert(guild, TTSSession::new(instance, ctx.clone(), true));
                 }
-            } else {
-                false
-            };
-
-            if !is_connected {
-                warn!(guild_id = %guild_id, "Bot disconnected from voice channel");
-
-                let should_reconnect = match self.check_voice_channel_users(ctx, instance).await {
-                    Ok(has_users) => has_users,
-                    Err(e) => {
-                        warn!(guild_id = %guild_id, error = %e, "Failed to check voice channel users, skipping reconnection");
-                        false
-                    }
-                };
-
-                if should_reconnect {
-                    let attempts = self
-                        .reconnection_attempts
-                        .get(guild_id)
-                        .copied()
-                        .unwrap_or(0);
-
-                    if attempts >= MAX_RECONNECTION_ATTEMPTS {
-                        error!(
-                            guild_id = %guild_id,
-                            attempts = attempts,
-                            "Maximum reconnection attempts reached, removing instance"
-                        );
-                        guilds_to_remove.push(*guild_id);
-                        self.reconnection_attempts.remove(guild_id);
-                        continue;
-                    }
-
-                    if attempts > 0 {
-                        let backoff_duration =
-                            Duration::from_secs(RECONNECTION_BACKOFF_SECS * (2_u64.pow(attempts)));
-                        warn!(
-                            guild_id = %guild_id,
-                            attempt = attempts + 1,
-                            backoff_secs = backoff_duration.as_secs(),
-                            "Applying backoff before reconnection attempt"
-                        );
-                        tokio::time::sleep(backoff_duration).await;
-                    }
-
-                    match instance.reconnect(ctx, true).await {
-                        Ok(_) => {
-                            info!(
-                                guild_id = %guild_id,
-                                attempts = attempts + 1,
-                                "Successfully reconnected to voice channel"
-                            );
-
-                            self.reconnection_attempts.remove(guild_id);
-
-                            let embed = CreateEmbed::new()
-                                .title("🔄 自動再接続しました")
-                                .description("読み上げを停止したい場合は `/stop` コマンドを使用してください。")
-                                .color(0x00ff00);
-
-                            if let Some(&text_channel) = instance.text_channels.first() {
-                                let msg = CreateMessage::new().embed(embed);
-                                if let Err(e) =
-                                    text_channel.widen().send_message(&ctx.http, msg).await
-                                {
-                                    error!(guild_id = %guild_id, error = %e, "Failed to send reconnection message");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let new_attempts = attempts + 1;
-                            self.reconnection_attempts.insert(*guild_id, new_attempts);
-                            error!(
-                                guild_id = %guild_id,
-                                attempt = new_attempts,
-                                error = %e,
-                                "Failed to reconnect to voice channel"
-                            );
-
-                            if new_attempts >= MAX_RECONNECTION_ATTEMPTS {
-                                guilds_to_remove.push(*guild_id);
-                                self.reconnection_attempts.remove(guild_id);
-                            }
-                        }
-                    }
-                } else {
-                    info!(
-                        guild_id = %guild_id,
-                        "No users in voice channel, removing instance"
-                    );
-                    guilds_to_remove.push(*guild_id);
-                    self.reconnection_attempts.remove(guild_id);
-                }
+                Ok(None) => {}
+                Err(error) => failure = Some(error),
             }
         }
-
-        for guild_id in guilds_to_remove {
-            storage.remove(&guild_id);
-
-            if let Err(e) = database.remove_tts_instance(guild_id).await {
-                error!(guild_id = %guild_id, error = %e, "Failed to remove TTS instance from database");
-            }
-
-            if let Err(e) = manager.remove(guild_id).await {
-                error!(guild_id = %guild_id, error = %e, "Failed to remove bot from voice channel");
-            }
-
-            info!(guild_id = %guild_id, "Removed disconnected TTS instance");
+        if let Some(error) = failure {
+            return Err(error);
         }
-
+        self.restored = true;
         Ok(())
     }
 
-    #[instrument(skip(self, ctx, instance))]
-    async fn check_voice_channel_users(
-        &self,
-        ctx: &Context,
-        instance: &crate::tts::instance::TTSInstance,
-    ) -> Result<bool> {
-        let channels = instance.guild.channels(&ctx.http).await.map_err(|e| {
-            ConnectionMonitorError::VoiceChannelCheck(format!(
-                "Failed to get guild channels: {}",
-                e
-            ))
-        })?;
+    async fn check_connections(&mut self, ctx: &Context) {
+        if !self.restored {
+            if let Err(error) = self.restore(ctx).await {
+                tracing::warn!(error = %error, "Cannot restore sessions yet; saved state is retained");
+            }
+        }
+        let sessions: Vec<_> = ctx
+            .data::<UserData>()
+            .tts_data
+            .read()
+            .await
+            .iter()
+            .map(|(&guild, session)| (guild, session.clone()))
+            .collect();
+        self.retries
+            .retain(|guild, _| sessions.iter().any(|(id, _)| id == guild));
+        let due = sessions
+            .into_iter()
+            .filter(|(guild, session)| {
+                session.is_stopped()
+                    || self
+                        .retries
+                        .get(guild)
+                        .is_none_or(|retry| Instant::now() >= retry.next_attempt)
+            })
+            .collect::<Vec<_>>();
+        let results = stream::iter(due)
+            .map(|(guild, session)| async move { (guild, check_session(ctx, session).await) })
+            .buffer_unordered(8)
+            .collect::<Vec<_>>()
+            .await;
+        for (guild, result) in results {
+            match result {
+                Ok(()) => {
+                    self.retries.remove(&guild);
+                }
+                Err(error) => {
+                    let retry = RetryState::failed(self.retries.remove(&guild));
+                    tracing::warn!(guild_id = %guild, failures = retry.failures, error = %error, "Session recovery deferred; saved state is retained");
+                    self.retries.insert(guild, retry);
+                }
+            }
+        }
+    }
+}
 
-        if let Some(channel) = channels.get(&instance.voice_channel) {
-            let members = channel.members(&ctx.cache).map_err(|e| {
-                ConnectionMonitorError::VoiceChannelCheck(format!(
-                    "Failed to get channel members: {}",
-                    e
-                ))
-            })?;
-            let user_count = members.iter().filter(|member| !member.user.bot()).count();
+async fn check_session(ctx: &Context, session: Arc<TTSSession>) -> Result<()> {
+    if session.is_stopped() {
+        return session.stop(ctx).await;
+    }
+    match voice_presence(ctx, &session.instance) {
+        VoicePresence::Unknown => Ok(()),
+        VoicePresence::Empty => session.stop(ctx).await,
+        VoicePresence::Occupied => session.connect(ctx).await,
+    }
+}
 
-            info!(
-                guild_id = %instance.guild,
-                channel_id = %instance.voice_channel,
-                user_count = user_count,
-                "Checked voice channel users"
-            );
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-            Ok(user_count > 0)
-        } else {
-            warn!(
-                guild_id = %instance.guild,
-                channel_id = %instance.voice_channel,
-                "Voice channel no longer exists"
-            );
-            Ok(false)
+    #[test]
+    fn failed_reconnections_keep_retrying_with_bounded_backoff() {
+        let mut state = None;
+        for expected in 1..=20 {
+            let retry = RetryState::failed(state);
+            assert_eq!(retry.failures, expected);
+            assert!(retry.next_attempt > Instant::now());
+            assert!(retry.next_attempt.duration_since(Instant::now()) <= Duration::from_secs(60));
+            state = Some(retry);
         }
     }
 }

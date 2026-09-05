@@ -44,9 +44,11 @@ pub async fn handle_add_dictionary(ctx: &Context, modal: &ModalInteraction) -> R
         .get();
 
     // Update server config
-    let mut config = utils::get_server_config(ctx, guild_id).await?;
-    config.dictionary.rules.push(rule);
-    utils::set_server_config(ctx, guild_id, config).await?;
+    utils::update_server_config(ctx, guild_id, |config| {
+        config.dictionary.rules.push(rule.clone());
+        Ok(())
+    })
+    .await?;
 
     // Send success response
     modal

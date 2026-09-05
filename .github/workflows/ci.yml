@@ -47,6 +47,15 @@ jobs:
       - name: Run tests
         run: cargo test --locked --all-targets
 
+      - name: Run documentation examples
+        run: cargo test --locked --doc
+
+      - name: Install isolated Redis test dependency
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+
+      - name: Run Redis integration tests (temporary Unix sockets only)
+        run: cargo test --locked --lib database::database::tests -- --include-ignored
+
   container:
     needs: rust
     runs-on: ubuntu-latest

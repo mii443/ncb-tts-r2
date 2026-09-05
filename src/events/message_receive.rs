@@ -1,38 +1,26 @@
-use serenity::{model::id::ChannelId, model::prelude::Message, prelude::Context};
-
-use crate::data::UserData;
+use crate::tts::session::get_session;
+use serenity::{
+    model::{id::ChannelId, prelude::Message},
+    prelude::Context,
+};
 
 pub async fn message(ctx: &Context, message: &Message) {
-    if message.author.bot() {
+    if message.author.bot() || message.content.starts_with(';') {
         return;
     }
-
-    let guild_id = message.guild(&ctx.cache);
-
-    if let None = guild_id {
+    let Some(guild) = message.guild_id else {
         return;
-    }
-
-    let guild_id = guild_id.unwrap().id;
-
-    let storage_lock = ctx.data::<UserData>().tts_data.clone();
-
+    };
+    let Some(session) = get_session(ctx, guild).await else {
+        return;
+    };
+    if !session
+        .instance
+        .contains_text_channel(ChannelId::new(message.channel_id.get()))
     {
-        let mut storage = storage_lock.write().await;
-        if !storage.contains_key(&guild_id) {
-            return;
-        }
-
-        let instance = storage.get_mut(&guild_id).unwrap();
-
-        if !instance.contains_text_channel(ChannelId::new(message.channel_id.get())) {
-            return;
-        }
-
-        if message.content.starts_with(";") {
-            return;
-        }
-
-        instance.read(message.clone(), &ctx).await;
+        return;
+    }
+    if let Err(error) = session.enqueue(message.clone()) {
+        tracing::warn!(guild_id = %guild, error = %error, "Unable to queue message");
     }
 }

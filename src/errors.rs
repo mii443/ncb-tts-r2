@@ -20,7 +20,25 @@ pub enum NCBError {
     GCPAuth(#[from] gcp_auth::Error),
 
     #[error("HTTP request error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(#[source] reqwest::Error),
+
+    #[error("{service} API returned HTTP {status}")]
+    ApiStatus { service: &'static str, status: u16 },
+
+    #[error("{service} API returned an invalid response: {reason}")]
+    ApiResponse {
+        service: &'static str,
+        reason: &'static str,
+    },
+
+    #[error("{operation} timed out")]
+    Timeout { operation: &'static str },
+
+    #[error("Speech queue is full")]
+    QueueFull,
+
+    #[error("Speech session has stopped")]
+    SessionStopped,
 
     #[error("JSON parsing error: {0}")]
     Json(#[from] serde_json::Error),
@@ -71,7 +89,28 @@ pub enum NCBError {
     Toml(#[from] toml::de::Error),
 }
 
+impl From<reqwest::Error> for NCBError {
+    fn from(error: reqwest::Error) -> Self {
+        // Request URLs may contain API keys, signed URLs and message text.
+        Self::Http(error.without_url())
+    }
+}
+
 impl NCBError {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Http(error) => error.is_timeout() || error.is_connect() || error.is_body(),
+            Self::ApiStatus { status, .. } => *status == 408 || *status == 429 || *status >= 500,
+            Self::Timeout { .. } => true,
+            Self::GCPAuth(
+                gcp_auth::Error::OAuthConnectionError(_)
+                | gcp_auth::Error::ConnectionError(_)
+                | gcp_auth::Error::ServerUnavailable,
+            ) => true,
+            _ => false,
+        }
+    }
+
     pub fn config(message: impl Into<String>) -> Self {
         Self::Config(message.into())
     }
@@ -199,7 +238,7 @@ pub mod validation {
             return Err(NCBError::invalid_input("Text cannot be empty"));
         }
 
-        if text.len() > constants::MAX_TTS_TEXT_LENGTH {
+        if text.chars().count() > constants::MAX_TTS_TEXT_LENGTH {
             return Err(NCBError::text_too_long(constants::MAX_TTS_TEXT_LENGTH));
         }
 
@@ -227,7 +266,7 @@ pub mod validation {
             return Err(NCBError::invalid_input("Replacement text cannot be empty"));
         }
 
-        if text.len() > constants::MAX_TTS_TEXT_LENGTH {
+        if text.chars().count() > constants::MAX_TTS_TEXT_LENGTH {
             return Err(NCBError::text_too_long(constants::MAX_TTS_TEXT_LENGTH));
         }
 
@@ -236,25 +275,7 @@ pub mod validation {
 
     /// Sanitize SSML input to prevent injection attacks
     pub fn sanitize_ssml(text: &str) -> String {
-        // Remove or escape potentially dangerous SSML tags
-        let _dangerous_tags = [
-            "audio", "break", "emphasis", "lang", "mark", "p", "phoneme", "prosody", "say-as",
-            "speak", "sub", "voice", "w",
-        ];
-
-        let mut sanitized = text.to_string();
-
-        // Remove script-like content
-        sanitized = sanitized.replace("<script", "&lt;script");
-        sanitized = sanitized.replace("javascript:", "");
-        sanitized = sanitized.replace("data:", "");
-
-        // Limit the overall length
-        if sanitized.len() > constants::MAX_SSML_LENGTH {
-            sanitized.truncate(constants::MAX_SSML_LENGTH);
-        }
-
-        sanitized
+        crate::tts::text::escape_xml(text, constants::MAX_SSML_LENGTH)
     }
 }
 
@@ -512,7 +533,7 @@ mod tests {
 
             let input_with_js = "javascript:alert('test')Hello";
             let output = sanitize_ssml(input_with_js);
-            assert!(!output.contains("javascript:"));
+            assert!(output.contains("javascript:")); // Literal text is escaped, not interpreted.
             assert!(output.contains("Hello"));
 
             let long_input = "a".repeat(constants::MAX_SSML_LENGTH + 100);

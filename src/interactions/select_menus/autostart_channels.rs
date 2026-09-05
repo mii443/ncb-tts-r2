@@ -12,13 +12,11 @@ pub async fn handle_voice_channel_select(
     let channel_id = utils::parse_select_value(interaction, "SET_AUTOSTART_CHANNEL_")?;
     let guild_id = utils::extract_guild_id(interaction)?;
 
-    let mut config = utils::get_server_config(ctx, guild_id).await?;
-    config.autostart_channel_id = if channel_id == 0 {
-        None
-    } else {
-        Some(channel_id)
-    };
-    utils::set_server_config(ctx, guild_id, config).await?;
+    utils::update_server_config(ctx, guild_id, |config| {
+        config.autostart_channel_id = (channel_id != 0).then_some(channel_id);
+        Ok(())
+    })
+    .await?;
 
     let response_content = if channel_id != 0 {
         "自動参加チャンネルを設定しました。"
@@ -40,13 +38,11 @@ pub async fn handle_text_channel_select(
     let channel_id = utils::parse_select_value(interaction, "SET_AUTOSTART_TEXT_CHANNEL_")?;
     let guild_id = utils::extract_guild_id(interaction)?;
 
-    let mut config = utils::get_server_config(ctx, guild_id).await?;
-    config.autostart_text_channel_id = if channel_id == 0 {
-        None
-    } else {
-        Some(channel_id)
-    };
-    utils::set_server_config(ctx, guild_id, config).await?;
+    utils::update_server_config(ctx, guild_id, |config| {
+        config.autostart_text_channel_id = (channel_id != 0).then_some(channel_id);
+        Ok(())
+    })
+    .await?;
 
     let response_content = if channel_id != 0 {
         "自動参加テキストチャンネルを設定しました。"
