@@ -129,7 +129,12 @@ impl TTSMessage for Message {
 
         let tts = &data.tts_client;
 
-        let synthesis_result = match config.tts_type.unwrap_or(TTSType::GCP) {
+        let tts_type = config
+            .tts_type
+            .unwrap_or(TTSType::GCP)
+            .available_or_default();
+
+        let synthesis_result = match tts_type {
             TTSType::GCP => {
                 let sanitized_text = validation::sanitize_ssml(&text);
                 retry_with_backoff(
@@ -173,6 +178,7 @@ impl TTSMessage for Message {
                 )
                 .await
             }
+            #[cfg(toriel_voice)]
             TTSType::TORIEL => {
                 let processed_text = text.replace("<break time=\"200ms\"/>", ",");
                 retry_with_backoff(
@@ -182,6 +188,8 @@ impl TTSMessage for Message {
                 )
                 .await
             }
+            #[cfg(not(toriel_voice))]
+            TTSType::TORIEL => unreachable!("unavailable TTS engines fall back to GCP"),
         };
 
         match synthesis_result {

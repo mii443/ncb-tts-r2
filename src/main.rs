@@ -23,9 +23,7 @@ use event_handler::Handler;
 use serenity::prelude::{Client, GatewayIntents, RwLock, Token};
 use trace::init_tracing_subscriber;
 use tracing::info;
-use tts::{
-    gcp_tts::gcp_tts::GCPTTS, toriel::toriel::TorielTTS, tts::TTS, voicevox::voicevox::VOICEVOX,
-};
+use tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX};
 
 #[tokio::main]
 async fn main() {
@@ -49,13 +47,12 @@ async fn run() -> Result<()> {
         .await
         .map_err(|e| NCBError::GCPAuth(e))?;
     let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url);
-    let toriel = TorielTTS::new();
     let database_client = Database::new_with_url(config.redis_url).await?;
 
     let user_data = UserData {
         songbird: Arc::clone(&manager),
         tts_data: Arc::new(RwLock::new(HashMap::default())),
-        tts_client: Arc::new(TTS::new(voicevox, tts, toriel)),
+        tts_client: Arc::new(TTS::new(voicevox, tts)),
         database: Arc::new(database_client),
     };
 

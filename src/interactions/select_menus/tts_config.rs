@@ -35,6 +35,7 @@ pub async fn handle_tts_config_select(
                 config.tts_type = Some(TTSType::VOICEVOX);
                 config_changed = true;
             }
+            #[cfg(toriel_voice)]
             "TTS_CONFIG_ENGINE_SELECTED_TORIEL" => {
                 config.tts_type = Some(TTSType::TORIEL);
                 config_changed = true;

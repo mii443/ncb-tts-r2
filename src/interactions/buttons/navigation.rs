@@ -68,7 +68,10 @@ pub async fn handle_back_to_main_config(
         .map_err(|e| NCBError::database(format!("Failed to get user config: {}", e)))?
         .ok_or_else(|| NCBError::config("User config not found"))?;
 
-    let tts_type = config.tts_type.unwrap_or(TTSType::GCP);
+    let tts_type = config
+        .tts_type
+        .unwrap_or(TTSType::GCP)
+        .available_or_default();
 
     let engine_select = CreateActionRow::SelectMenu(
         CreateSelectMenu::new(
