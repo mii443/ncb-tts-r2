@@ -8,8 +8,8 @@ use crate::{
 };
 use serenity::{
     all::{
-        AutoArchiveDuration, ChannelId, CommandDataOptionValue, CommandInteraction, CreateEmbed,
-        CreateMessage, CreateThread, EditInteractionResponse,
+        AutoArchiveDuration, ChannelId, CommandDataOptionValue, CommandInteraction, CreateThread,
+        EditInteractionResponse,
     },
     prelude::Context,
 };
@@ -77,21 +77,21 @@ pub async fn setup_command(ctx: &Context, command: &CommandInteraction) -> Resul
         .insert(guild_id, session.clone());
     drop(setup_guard);
     session.connect(ctx).await?;
+    let mut response = format!(
+        "TTS Channel: <#{}>{}",
+        text_channel,
+        if text_channel == channel_id {
+            "\nボイスチャンネルのチャットを開いて利用できます。"
+        } else {
+            ""
+        },
+    );
     command
         .edit_response(
             &ctx.http,
-            EditInteractionResponse::new().content(format!(
-                "TTS Channel: <#{}>{}",
-                text_channel,
-                if text_channel == channel_id {
-                    "\nボイスチャンネルのチャットを開いて利用できます。"
-                } else {
-                    ""
-                },
-            )),
+            EditInteractionResponse::new().content(response.clone()),
         )
         .await?;
-
     let speakers = data
         .tts_client
         .voicevox_client
@@ -101,22 +101,24 @@ pub async fn setup_command(ctx: &Context, command: &CommandInteraction) -> Resul
             tracing::warn!(error = %error, "Cannot fetch VOICEVOX credits");
             vec!["VOICEVOX API unavailable".into()]
         });
-    text_channel
-        .widen()
-        .send_message(
-            &ctx.http,
-            CreateMessage::new().embed(
-                CreateEmbed::new()
-                    .title("読み上げ (Serenity)")
-                    .field(
-                        "VOICEVOXクレジット",
-                        format!("```\n{}\n```", speakers.join("\n")),
-                        false,
-                    )
-                    .field("設定コマンド", "`/config`", false)
-                    .field("フィードバック", "https://feedback.mii.codes/", false),
-            ),
-        )
-        .await?;
+    let notice = crate::tts::notice::send_credits(
+        &ctx.http,
+        text_channel,
+        "読み上げ (Serenity)",
+        &speakers,
+        (text_channel == command_channel).then_some(command.app_permissions),
+    )
+    .await;
+    if let Err(error) = notice {
+        tracing::warn!(%guild_id, channel_id = %text_channel, %error,
+            "TTS connected but setup notification failed");
+        response.push_str("\n読み上げは開始しましたが、案内メッセージを投稿できませんでした。Botの投稿権限と接続状況を確認してください。");
+        if let Err(error) = command
+            .edit_response(&ctx.http, EditInteractionResponse::new().content(response))
+            .await
+        {
+            tracing::warn!(%guild_id, %error, "Cannot update setup notification warning");
+        }
+    }
     Ok(())
 }

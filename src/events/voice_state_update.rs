@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use serenity::{
-    all::{CreateEmbed, CreateMessage, EditThread, ThreadId},
+    all::{EditThread, ThreadId},
     model::voice::VoiceState,
     prelude::Context,
 };
@@ -86,19 +86,17 @@ pub async fn voice_state_update(ctx: &Context, old: Option<VoiceState>, new: Voi
                 tracing::warn!(error = %error, "Cannot fetch VOICEVOX credits");
                 vec!["VOICEVOX API unavailable".into()]
             });
-        let message = CreateMessage::new().embed(
-            CreateEmbed::new()
-                .title("自動参加 読み上げ（Serenity）")
-                .field(
-                    "VOICEVOXクレジット",
-                    format!("```\n{}\n```", speakers.join("\n")),
-                    false,
-                )
-                .field("設定コマンド", "`/config`", false)
-                .field("フィードバック", "https://feedback.mii.codes/", false),
-        );
-        if let Err(error) = channel.widen().send_message(&ctx.http, message).await {
-            tracing::warn!(error = %error, "Cannot send autostart notification");
+        if let Err(error) = crate::tts::notice::send_credits(
+            &ctx.http,
+            channel,
+            "自動参加 読み上げ（Serenity）",
+            &speakers,
+            None,
+        )
+        .await
+        {
+            tracing::warn!(%guild_id, channel_id = %channel, %error,
+                "Cannot send autostart notification");
         }
         return;
     };

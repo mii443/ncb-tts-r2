@@ -2,6 +2,7 @@ pub mod gcp_tts;
 pub(crate) mod http;
 pub mod instance;
 pub mod message;
+pub(crate) mod notice;
 pub mod session;
 pub mod text;
 #[cfg(toriel_voice)]

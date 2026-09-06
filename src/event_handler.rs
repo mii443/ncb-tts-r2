@@ -22,7 +22,14 @@ impl EventHandler for Handler {
             }
             FullEvent::InteractionCreate { interaction } => {
                 if let Err(e) = interactions::handle_interaction(ctx, interaction).await {
-                    tracing::error!("Error handling interaction: {}", e);
+                    let command = interaction.as_command();
+                    tracing::error!(
+                        guild_id = ?interaction.guild_id(),
+                        command = command.map(|command| command.data.name.as_str()),
+                        channel_id = ?command.map(|command| command.channel_id),
+                        error = %e,
+                        "Error handling interaction"
+                    );
                     if let Err(response_err) = self.send_error_response(ctx, interaction, &e).await
                     {
                         tracing::error!("Failed to send error response: {}", response_err);
