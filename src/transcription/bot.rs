@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use serenity::all::{
     ChannelId, CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption,
     CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse,
-    GuildId as SerenityGuildId, Permissions,
+    GuildId as SerenityGuildId,
 };
 use tracing::{error, warn};
 
@@ -168,7 +168,6 @@ impl Transcription {
         let guild_id = command
             .guild_id
             .ok_or_else(|| anyhow::anyhow!("Guild内で実行してください"))?;
-        require_session_manager(command)?;
         let data = ctx.data::<crate::data::UserData>();
         let _guard = data.setup_guard(guild_id).await;
         if self.router.is_active(GuildId(guild_id.get())) {
@@ -252,7 +251,6 @@ impl Transcription {
         let guild_id = command
             .guild_id
             .ok_or_else(|| anyhow::anyhow!("Guild内で実行してください"))?;
-        require_session_manager(command)?;
         let data = ctx.data::<crate::data::UserData>();
         let _guard = data.setup_guard(guild_id).await;
         self.stop_router(guild_id, "stopped");
@@ -353,22 +351,6 @@ fn invoking_voice_channel(
 ) -> Option<ChannelId> {
     let guild = ctx.cache.guild(guild_id)?;
     guild.voice_states.get(&user_id)?.channel_id
-}
-
-fn require_session_manager(command: &CommandInteraction) -> anyhow::Result<()> {
-    let allowed = command
-        .member
-        .as_ref()
-        .and_then(|member| member.permissions)
-        .is_some_and(|permissions| {
-            permissions.intersects(
-                Permissions::ADMINISTRATOR | Permissions::MANAGE_GUILD | Permissions::MOVE_MEMBERS,
-            )
-        });
-    if !allowed {
-        anyhow::bail!("開始・停止にはサーバー管理またはメンバー移動権限が必要です");
-    }
-    Ok(())
 }
 
 pub fn transcribe_command(web_enabled: bool) -> CreateCommand<'static> {

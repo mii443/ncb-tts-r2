@@ -72,9 +72,9 @@ OAuth scopeは `identify` だけで、既存rsttのOAuthアプリを継続利用
 
 ## Discord操作と接続の共有
 
-- `/transcribe start`: 実行者がいるVCで開始。Administrator / Manage Server / Move Membersの
-  いずれかが必要です。開始通知とWebリンクをテキストチャンネルへ送ります。
-- `/transcribe stop`: 文字起こしを停止。同じ権限が必要です。TTSが動作中ならVCに残ります。
+- `/transcribe start`: 実行者がいるVCで開始。サーバー管理・メンバー移動などの管理権限は不要です。
+  開始通知とWebリンクをテキストチャンネルへ送ります。
+- `/transcribe stop`: 文字起こしを停止。管理権限は不要です。TTSが動作中ならVCに残ります。
 - `/transcribe status`: 認識セッション、hayamimi接続、ストリーム数、同意方式を表示。
 - `/transcribe web`: 対象VCの参加者へWebリンクを再表示。
 - `/transcribe consent` / `revoke`: 本人の送信を有効化／停止。
