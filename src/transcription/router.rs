@@ -519,8 +519,22 @@ impl VoiceRouter {
         speaking: impl IntoIterator<Item = (u32, Vec<i16>)>,
         silent: impl IntoIterator<Item = u32>,
     ) {
+        self.voice_tick_for_session(guild_id, None, speaking, silent);
+    }
+
+    pub fn voice_tick_for_session(
+        &self,
+        guild_id: GuildId,
+        token: Option<&str>,
+        speaking: impl IntoIterator<Item = (u32, Vec<i16>)>,
+        silent: impl IntoIterator<Item = u32>,
+    ) {
         let mut state = self.state.lock().expect("router poisoned");
-        if !state.sessions.contains_key(&guild_id) {
+        if state
+            .sessions
+            .get(&guild_id)
+            .is_none_or(|session| token.is_some_and(|token| session.web_token != token))
+        {
             return;
         }
         let captured_at_ms = now_ms();
@@ -884,5 +898,18 @@ mod tests {
         );
         assert_eq!(router.active_streams(GuildId(1)), 0);
         assert!(bridge.events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn in_flight_audio_cannot_cross_a_session_restart() {
+        let (bridge, router) = setup();
+        let old_token = router.web_token(GuildId(1)).unwrap();
+        router.stop_guild(GuildId(1), "stopped");
+        let token = router.start_guild(GuildId(1), 10);
+        router.voice_tick_for_session(GuildId(1), Some(&old_token), [(100, vec![1; 320])], []);
+        router.speaking_state(GuildId(1), 100, UserId(11), "Alice".into());
+        assert!(bridge.audio.lock().unwrap().is_empty());
+        router.voice_tick_for_session(GuildId(1), Some(&token), [(100, vec![2; 320])], []);
+        assert_eq!(bridge.audio.lock().unwrap().len(), 1);
     }
 }

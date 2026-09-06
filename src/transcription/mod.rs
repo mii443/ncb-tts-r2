@@ -2,6 +2,7 @@
 pub mod bot;
 pub mod bridge;
 pub mod protocol;
+mod receiver;
 pub mod router;
 #[cfg(feature = "web-ui")]
 pub mod web;
@@ -36,8 +37,16 @@ impl Transcription {
     }
 }
 
-pub fn voice_config(receive: bool) -> songbird::Config {
+pub fn voice_manager(config: &crate::config::Config) -> Arc<songbird::Songbird> {
+    songbird::Songbird::serenity_from_config(voice_config(config.transcription.enabled))
+}
+
+fn voice_config(receive: bool) -> songbird::Config {
     use songbird::driver::{Channels, DecodeConfig, DecodeMode, SampleRate};
+    // This Songbird revision can change the format of an existing decoder,
+    // but cannot switch a connected UDP receiver from Pass to Decode. Prepare
+    // decoding before the first join, including joins initiated by TTS. Session
+    // and consent gates in the receiver/router control forwarding to hayamimi.
     songbird::Config::default().decode_mode(if receive {
         DecodeMode::Decode(DecodeConfig::new(Channels::Mono, SampleRate::Hz16000))
     } else {

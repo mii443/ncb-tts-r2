@@ -203,8 +203,14 @@ async fn run_bridge(
                     if !state.read().expect("bridge state poisoned").streams.contains_key(&frame.stream_id) {
                         continue;
                     }
+                    let first_frame = frame.sequence == 0;
+                    let stream_id = frame.stream_id;
+                    let samples = frame.pcm.len() / 2;
                     if send_audio(&mut writer, frame).await.is_err() {
                         break;
+                    }
+                    if first_frame {
+                        info!(stream_id, samples, "sent first transcription audio frame to hayamimi");
                     }
                 }
                 incoming = reader.next() => {

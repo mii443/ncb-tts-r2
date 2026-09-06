@@ -32,8 +32,7 @@ async fn run() -> Result<()> {
     #[cfg(not(feature = "transcription"))]
     let manager = songbird::Songbird::serenity();
     #[cfg(feature = "transcription")]
-    let manager =
-        songbird::Songbird::serenity_from_config(ncb_tts_r2::transcription::voice_config(false));
+    let manager = ncb_tts_r2::transcription::voice_manager(&config);
     let shutdown = tokio_util::sync::CancellationToken::new();
     #[cfg(feature = "transcription")]
     #[allow(unused_mut)]

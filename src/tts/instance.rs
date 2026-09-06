@@ -68,13 +68,19 @@ impl TTSInstance {
 
     #[tracing::instrument(skip_all)]
     pub async fn reconnect(&self, ctx: &Context, _skip_check: bool) -> crate::errors::Result<()> {
+        let data = ctx.data::<UserData>();
+        #[cfg(feature = "transcription")]
+        if let Some(transcription) = &data.transcription {
+            let call = data.songbird.get_or_insert(self.guild);
+            transcription
+                .install_receiver(ctx, self.guild, self.voice_channel, &call)
+                .await;
+        }
         // Gateway connection info can survive a driver failure. Songbird's join
         // also checks the driver and is a no-op when it is already connected.
         tokio::time::timeout(
             std::time::Duration::from_secs(10),
-            ctx.data::<UserData>()
-                .songbird
-                .join(self.guild, self.voice_channel),
+            data.songbird.join(self.guild, self.voice_channel),
         )
         .await
         .map_err(|_| crate::errors::NCBError::Timeout {

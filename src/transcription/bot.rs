@@ -1,19 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
-use serenity::{
-    all::{
-        ChannelId, CommandInteraction, CommandOptionType, Context, CreateCommand,
-        CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage,
-        EditInteractionResponse, GuildId as SerenityGuildId, Permissions,
-    },
-    async_trait,
-    http::Http,
+use serenity::all::{
+    ChannelId, CommandInteraction, CommandOptionType, Context, CreateCommand, CreateCommandOption,
+    CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse,
+    GuildId as SerenityGuildId, Permissions,
 };
-use songbird::{events::EventHandler as VoiceEventHandler, CoreEvent, Event, EventContext};
 use tracing::{error, warn};
 
 use crate::transcription::{
     bridge::BridgeHandle,
+    receiver::ReceiverRegistry,
     router::{GuildId, UserId, VoiceRouter},
 };
 
@@ -23,12 +19,7 @@ pub struct Transcription {
     pub router: Arc<VoiceRouter>,
     pub bridge: Arc<BridgeHandle>,
     pub web_base_url: Option<String>,
-    pub(super) receivers: std::sync::Mutex<
-        std::collections::HashMap<
-            SerenityGuildId,
-            std::sync::Weak<tokio::sync::Mutex<songbird::Call>>,
-        >,
-    >,
+    pub(super) receivers: ReceiverRegistry,
 }
 
 impl Transcription {
@@ -74,37 +65,17 @@ impl Transcription {
         }
     }
 
-    async fn install_receiver(
+    /// Called under the guild setup lock before every TTS/transcription join.
+    pub(crate) async fn install_receiver(
         &self,
         ctx: &Context,
         guild_id: SerenityGuildId,
+        voice_channel: ChannelId,
         call: &Arc<tokio::sync::Mutex<songbird::Call>>,
     ) {
-        let install = {
-            let mut receivers = self.receivers.lock().expect("receiver registry poisoned");
-            receivers.retain(|_, call| call.strong_count() > 0);
-            let exists = receivers
-                .get(&guild_id)
-                .and_then(std::sync::Weak::upgrade)
-                .is_some_and(|existing| Arc::ptr_eq(&existing, call));
-            receivers.insert(guild_id, Arc::downgrade(call));
-            !exists
-        };
-        let mut call = call.lock().await;
-        if !call.config().decode_mode.should_decode() {
-            call.set_config(super::voice_config(true));
-        }
-        if install {
-            let receiver = DiscordVoiceReceiver {
-                guild_id,
-                router: Arc::clone(&self.router),
-                http: Arc::clone(&ctx.http),
-                cache: Arc::clone(&ctx.cache),
-            };
-            call.add_global_event(CoreEvent::SpeakingStateUpdate.into(), receiver.clone());
-            call.add_global_event(CoreEvent::VoiceTick.into(), receiver.clone());
-            call.add_global_event(CoreEvent::ClientDisconnect.into(), receiver);
-        }
+        self.receivers
+            .install(ctx, guild_id, voice_channel, call, &self.router)
+            .await;
     }
 
     pub async fn voice_state_update(&self, ctx: &Context, state: &serenity::all::VoiceState) {
@@ -113,6 +84,8 @@ impl Transcription {
         };
         let data = ctx.data::<crate::data::UserData>();
         let _guard = data.setup_guard(guild).await;
+        self.receivers
+            .voice_state_update(ctx.cache.current_user().id, state);
         let Some(channel) = self.voice_channel(guild) else {
             return;
         };
@@ -120,9 +93,6 @@ impl Transcription {
             if state.channel_id.map(|id| id.get()) != Some(channel) {
                 self.router
                     .abort_guild(GuildId(guild.get()), "bot_left_or_moved");
-                if let Some(call) = data.songbird.get(guild) {
-                    call.lock().await.set_config(super::voice_config(false));
-                }
             }
         } else if state.channel_id.map(|id| id.get()) != Some(channel) {
             self.router
@@ -147,9 +117,6 @@ impl Transcription {
                 crate::tts::session::VoicePresence::Unknown => continue,
                 crate::tts::session::VoicePresence::Empty => {
                     self.stop_router(guild_id, "empty_channel");
-                    if let Some(call) = data.songbird.get(guild_id) {
-                        call.lock().await.set_config(super::voice_config(false));
-                    }
                     if !data.tts_data.read().await.contains_key(&guild_id) {
                         let _ = tokio::time::timeout(
                             Duration::from_secs(10),
@@ -160,7 +127,8 @@ impl Transcription {
                 }
                 crate::tts::session::VoicePresence::Occupied => {
                     let call = data.songbird.get_or_insert(guild_id);
-                    self.install_receiver(ctx, guild_id, &call).await;
+                    self.install_receiver(ctx, guild_id, ChannelId::new(channel), &call)
+                        .await;
                     if !matches!(
                         tokio::time::timeout(
                             Duration::from_secs(10),
@@ -219,7 +187,8 @@ impl Transcription {
             .router
             .start_guild(GuildId(guild_id.get()), voice_channel.get());
         let call = manager.get_or_insert(guild_id);
-        self.install_receiver(ctx, guild_id, &call).await;
+        self.install_receiver(ctx, guild_id, voice_channel, &call)
+            .await;
         if let Err(error) = tokio::time::timeout(
             Duration::from_secs(10),
             manager.join(guild_id, voice_channel),
@@ -230,7 +199,6 @@ impl Transcription {
         {
             self.router
                 .abort_guild(GuildId(guild_id.get()), "join_failed");
-            call.lock().await.set_config(super::voice_config(false));
             if !data.tts_data.read().await.contains_key(&guild_id) {
                 let _ = manager.remove(guild_id).await;
             }
@@ -263,7 +231,6 @@ impl Transcription {
         {
             self.router
                 .abort_guild(GuildId(guild_id.get()), "notification_failed");
-            call.lock().await.set_config(super::voice_config(false));
             if !data.tts_data.read().await.contains_key(&guild_id) {
                 let _ =
                     tokio::time::timeout(Duration::from_secs(10), manager.remove(guild_id)).await;
@@ -289,9 +256,6 @@ impl Transcription {
         let data = ctx.data::<crate::data::UserData>();
         let _guard = data.setup_guard(guild_id).await;
         self.stop_router(guild_id, "stopped");
-        if let Some(call) = data.songbird.get(guild_id) {
-            call.lock().await.set_config(super::voice_config(false));
-        }
         if !data.tts_data.read().await.contains_key(&guild_id) {
             tokio::time::timeout(Duration::from_secs(10), data.songbird.remove(guild_id)).await??;
         }
@@ -379,72 +343,6 @@ impl Transcription {
             anyhow::bail!("このGuildでは音声認識が動作していません");
         }
         Ok("同意を撤回しました。以後の音声は送信されません。".to_owned())
-    }
-}
-
-#[derive(Clone)]
-struct DiscordVoiceReceiver {
-    guild_id: SerenityGuildId,
-    router: Arc<VoiceRouter>,
-    http: Arc<Http>,
-    cache: Arc<serenity::cache::Cache>,
-}
-
-#[async_trait]
-impl VoiceEventHandler for DiscordVoiceReceiver {
-    async fn act(&self, event: &EventContext<'_>) -> Option<Event> {
-        let guild_id = GuildId(self.guild_id.get());
-        let token = self.router.web_token(guild_id)?;
-        if !self.cache.guild(self.guild_id).is_some_and(|guild| {
-            !guild.unavailable()
-                && guild
-                    .voice_states
-                    .get(&self.cache.current_user().id)
-                    .and_then(|state| state.channel_id)
-                    .map(|channel| channel.get())
-                    == self.router.voice_channel(guild_id)
-        }) {
-            return None;
-        }
-        match event {
-            EventContext::SpeakingStateUpdate(speaking) => {
-                if let Some(user_id) = speaking.user_id {
-                    let serenity_user = serenity::all::UserId::new(user_id.0);
-                    let (speaker, avatar_url) =
-                        match self.guild_id.member(&self.http, serenity_user).await {
-                            Ok(member) if member.user.bot() => return None,
-                            Ok(member) => (member.display_name().to_string(), Some(member.face())),
-                            Err(_) => (user_id.0.to_string(), None),
-                        };
-                    self.router.speaking_state_for_session(
-                        GuildId(self.guild_id.get()),
-                        Some(&token),
-                        speaking.ssrc,
-                        UserId(user_id.0),
-                        speaker,
-                        avatar_url,
-                    );
-                }
-            }
-            EventContext::VoiceTick(tick) => {
-                let speaking = tick
-                    .speaking
-                    .iter()
-                    .filter_map(|(ssrc, data)| {
-                        data.decoded_voice.as_ref().map(|pcm| (*ssrc, pcm.clone()))
-                    })
-                    .collect::<Vec<_>>();
-                let silent = tick.silent.iter().copied().collect::<Vec<_>>();
-                self.router
-                    .voice_tick(GuildId(self.guild_id.get()), speaking, silent);
-            }
-            EventContext::ClientDisconnect(disconnect) => {
-                self.router
-                    .disconnect_user(GuildId(self.guild_id.get()), UserId(disconnect.user_id.0));
-            }
-            _ => {}
-        }
-        None
     }
 }
 
