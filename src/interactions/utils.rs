@@ -2,16 +2,59 @@ use crate::{
     data::UserData,
     database::{database::Database, server_config::ServerConfig, user_config::UserConfig},
     errors::{NCBError, Result},
+    tts::tts_type::TTSType,
 };
 use serenity::{
     all::{
         ButtonStyle, ComponentInteraction, CreateActionRow, CreateButton, CreateComponent,
-        CreateInteractionResponse, CreateInteractionResponseMessage, LabelComponent,
-        ModalComponent,
+        CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu,
+        CreateSelectMenuKind, CreateSelectMenuOption, LabelComponent, ModalComponent,
     },
     prelude::Context,
 };
 use std::sync::Arc;
+
+pub fn build_tts_engine_select(selected: TTSType) -> CreateActionRow<'static> {
+    let selected = selected.available_or_default();
+    let options = [
+        (
+            "Google TTS",
+            "TTS_CONFIG_ENGINE_SELECTED_GOOGLE",
+            TTSType::GCP,
+        ),
+        (
+            "VOICEVOX",
+            "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX",
+            TTSType::VOICEVOX,
+        ),
+        #[cfg(toriel_voice)]
+        (
+            "Toriel",
+            "TTS_CONFIG_ENGINE_SELECTED_TORIEL",
+            TTSType::TORIEL,
+        ),
+        (
+            "Klattesynth",
+            "TTS_CONFIG_ENGINE_SELECTED_KLATTERSYNTH",
+            TTSType::KLATTERSYNTH,
+        ),
+    ]
+    .into_iter()
+    .map(|(label, value, engine)| {
+        CreateSelectMenuOption::new(label, value).default_selection(selected == engine)
+    })
+    .collect::<Vec<_>>();
+
+    CreateActionRow::SelectMenu(
+        CreateSelectMenu::new(
+            "TTS_CONFIG_ENGINE",
+            CreateSelectMenuKind::String {
+                options: options.into(),
+            },
+        )
+        .placeholder("読み上げAPIを選択"),
+    )
+}
 
 pub async fn get_database_client(ctx: &Context) -> Result<Arc<Database>> {
     Ok(ctx.data::<UserData>().database.clone())
@@ -209,5 +252,45 @@ pub fn parse_select_index(interaction: &ComponentInteraction) -> Result<usize> {
             .map_err(|_| NCBError::invalid_input("Failed to parse index"))
     } else {
         Err(NCBError::invalid_input("Not a string select interaction"))
+    }
+}
+
+#[cfg(test)]
+mod tts_engine_tests {
+    use super::*;
+
+    #[test]
+    fn menu_keeps_all_engines_and_current_selection() {
+        for (selected, value) in [
+            (TTSType::GCP, "TTS_CONFIG_ENGINE_SELECTED_GOOGLE"),
+            (TTSType::VOICEVOX, "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX"),
+            (TTSType::TORIEL, "TTS_CONFIG_ENGINE_SELECTED_TORIEL"),
+            (
+                TTSType::KLATTERSYNTH,
+                "TTS_CONFIG_ENGINE_SELECTED_KLATTERSYNTH",
+            ),
+        ] {
+            let value = if selected == TTSType::TORIEL && !cfg!(toriel_voice) {
+                "TTS_CONFIG_ENGINE_SELECTED_GOOGLE"
+            } else {
+                value
+            };
+            let row = serde_json::to_value(build_tts_engine_select(selected)).unwrap();
+            let options = row["components"][0]["options"].as_array().unwrap();
+            assert_eq!(options.len(), if cfg!(toriel_voice) { 4 } else { 3 });
+            assert_eq!(
+                options.iter().any(|option| option["label"] == "Toriel"),
+                cfg!(toriel_voice)
+            );
+            assert!(options
+                .iter()
+                .any(|option| option["label"] == "Klattesynth"));
+            let defaults: Vec<_> = options
+                .iter()
+                .filter(|option| option["default"] == true)
+                .collect();
+            assert_eq!(defaults.len(), 1);
+            assert_eq!(defaults[0]["value"], value);
+        }
     }
 }

@@ -7,8 +7,7 @@ use crate::{
 use serenity::{
     all::{
         ButtonStyle, ComponentInteraction, CreateActionRow, CreateButton, CreateComponent,
-        CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu,
-        CreateSelectMenuKind, CreateSelectMenuOption,
+        CreateInteractionResponse, CreateInteractionResponseMessage,
     },
     prelude::Context,
 };
@@ -74,21 +73,7 @@ pub async fn handle_back_to_main_config(
         .unwrap_or(TTSType::GCP)
         .available_or_default();
 
-    let engine_select = CreateActionRow::SelectMenu(
-        CreateSelectMenu::new(
-            "TTS_CONFIG_ENGINE",
-            CreateSelectMenuKind::String {
-                options: vec![
-                    CreateSelectMenuOption::new("Google TTS", TTS_CONFIG_ENGINE_SELECTED_GOOGLE)
-                        .default_selection(tts_type == TTSType::GCP),
-                    CreateSelectMenuOption::new("VOICEVOX", TTS_CONFIG_ENGINE_SELECTED_VOICEVOX)
-                        .default_selection(tts_type == TTSType::VOICEVOX),
-                ]
-                .into(),
-            },
-        )
-        .placeholder("読み上げAPIを選択"),
-    );
+    let engine_select = utils::build_tts_engine_select(tts_type);
 
     let voicevox_button = CreateActionRow::Buttons(
         vec![CreateButton::new(TTS_CONFIG_VOICEVOX)

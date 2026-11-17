@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use songbird::{driver::Bitrate, input::cached::Compressed, tracks::Track};
 use tracing::{debug, info, instrument, warn};
 
+use crate::tts::klattersynth::KlattersynthTTS;
 #[cfg(toriel_voice)]
 use crate::tts::toriel::toriel::TorielTTS;
 use crate::{
@@ -28,6 +29,7 @@ use super::{
 pub struct TTS {
     pub voicevox_client: VOICEVOX,
     gcp_tts_client: GCPTTS,
+    klattersynth_tts_client: KlattersynthTTS,
     #[cfg(toriel_voice)]
     toriel_tts_client: TorielTTS,
     cache: Arc<RwLock<LruCache<CacheKey, Compressed>>>,
@@ -36,6 +38,7 @@ pub struct TTS {
     metrics: Arc<PerformanceMetrics>,
     voicevox_slots: tokio::sync::Semaphore,
     gcp_slots: tokio::sync::Semaphore,
+    klattersynth_slots: tokio::sync::Semaphore,
     cache_persistence_path: Option<String>,
 }
 
@@ -59,10 +62,15 @@ struct CacheEntry {
 }
 
 impl TTS {
-    pub fn new(voicevox_client: VOICEVOX, gcp_tts_client: GCPTTS) -> Self {
+    pub fn new(
+        voicevox_client: VOICEVOX,
+        gcp_tts_client: GCPTTS,
+        klattersynth_tts_client: KlattersynthTTS,
+    ) -> Self {
         let tts = Self {
             voicevox_client,
             gcp_tts_client,
+            klattersynth_tts_client,
             #[cfg(toriel_voice)]
             toriel_tts_client: TorielTTS::new(),
             cache: Arc::new(RwLock::new(LruCache::new(
@@ -73,6 +81,7 @@ impl TTS {
             metrics: Arc::new(PerformanceMetrics::new()),
             voicevox_slots: tokio::sync::Semaphore::new(4),
             gcp_slots: tokio::sync::Semaphore::new(4),
+            klattersynth_slots: tokio::sync::Semaphore::new(4),
             cache_persistence_path: Some("./tts_cache.bin".to_string()),
         };
 
@@ -220,6 +229,17 @@ impl TTS {
             .await
             .map_err(|_| NCBError::tts_synthesis("Toriel worker failed"))?
             .map_err(|_| NCBError::tts_synthesis("Toriel synthesis failed"))?;
+        Ok(Track::from(audio))
+    }
+
+    pub async fn synthesize_klattersynth(&self, text: &str) -> Result<Track> {
+        let _permit = self
+            .klattersynth_slots
+            .acquire()
+            .await
+            .map_err(|_| NCBError::tts_synthesis("Klattersynth service closed"))?;
+        let audio =
+            super::http::retry_synthesis(|| self.klattersynth_tts_client.synthesize(text)).await?;
         Ok(Track::from(audio))
     }
 

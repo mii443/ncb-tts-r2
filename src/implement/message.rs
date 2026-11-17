@@ -119,6 +119,7 @@ impl TTSMessage for Message {
                 )
                 .await?
             }
+            TTSType::KLATTERSYNTH => tts.synthesize_klattersynth(&text.plain()).await?,
             #[cfg(toriel_voice)]
             TTSType::TORIEL => tts.synthesize_toriel(&text.plain()).await?,
             #[cfg(not(toriel_voice))]

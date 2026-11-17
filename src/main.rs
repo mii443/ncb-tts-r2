@@ -7,7 +7,10 @@ use ncb_tts_r2::{
     errors::{NCBError, Result},
     event_handler::Handler,
     trace::init_tracing_subscriber,
-    tts::{gcp_tts::gcp_tts::GCPTTS, tts::TTS, voicevox::voicevox::VOICEVOX},
+    tts::{
+        gcp_tts::gcp_tts::GCPTTS, klattersynth::KlattersynthTTS, tts::TTS,
+        voicevox::voicevox::VOICEVOX,
+    },
 };
 use serenity::prelude::{Client, GatewayIntents, RwLock, Token};
 use tracing::info;
@@ -55,6 +58,7 @@ async fn run() -> Result<()> {
 
     let tts = GCPTTS::new("./credentials.json".to_string()).await?;
     let voicevox = VOICEVOX::new(config.voicevox_key, config.voicevox_original_api_url)?;
+    let klattersynth = KlattersynthTTS::new(config.klattersynth_api_url)?;
     let database_client = Database::new_with_url(config.redis_url).await?;
 
     let user_data = UserData {
@@ -62,7 +66,7 @@ async fn run() -> Result<()> {
         transcription,
         songbird: Arc::clone(&manager),
         tts_data: Arc::new(RwLock::new(HashMap::default())),
-        tts_client: Arc::new(TTS::new(voicevox, tts)),
+        tts_client: Arc::new(TTS::new(voicevox, tts, klattersynth)),
         database: Arc::new(database_client),
         readable_bot_ids: config.readable_bot_ids.into_iter().collect(),
         monitor_started: std::sync::atomic::AtomicBool::new(false),
@@ -136,6 +140,7 @@ fn load_config() -> Result<Config> {
     let voicevox_key = env::var("NCB_VOICEVOX_KEY").ok();
     let voicevox_original_api_url = env::var("NCB_VOICEVOX_ORIGINAL_API_URL").ok();
     let otel_http_url = env::var("NCB_OTEL_HTTP_URL").ok();
+    let klattersynth_api_url = env::var("NCB_KLATTERSYNTH_API_URL").ok();
     let readable_bot_ids = env::var("NCB_READABLE_BOT_IDS")
         .ok()
         .map(|ids| {
@@ -159,6 +164,7 @@ fn load_config() -> Result<Config> {
         voicevox_key,
         voicevox_original_api_url,
         otel_http_url,
+        klattersynth_api_url,
         readable_bot_ids,
         transcription: Default::default(),
         web: Default::default(),

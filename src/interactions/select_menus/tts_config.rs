@@ -24,6 +24,7 @@ pub async fn handle_tts_config_select(
     let engine = match selected.as_str() {
         "TTS_CONFIG_ENGINE_SELECTED_GOOGLE" => Some(TTSType::GCP),
         "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX" => Some(TTSType::VOICEVOX),
+        "TTS_CONFIG_ENGINE_SELECTED_KLATTERSYNTH" => Some(TTSType::KLATTERSYNTH),
         #[cfg(toriel_voice)]
         "TTS_CONFIG_ENGINE_SELECTED_TORIEL" => Some(TTSType::TORIEL),
         _ => None,

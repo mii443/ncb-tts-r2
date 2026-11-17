@@ -3,4 +3,5 @@ config.toml
 credentials.json
 /audio
 *.mp3
+!src/tts/toriel/voice_toriel.mp3
 *.swp

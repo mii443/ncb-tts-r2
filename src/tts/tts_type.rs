@@ -5,6 +5,7 @@ pub enum TTSType {
     GCP,
     VOICEVOX,
     TORIEL,
+    KLATTERSYNTH,
 }
 
 impl TTSType {

@@ -10,6 +10,7 @@ pub struct Config {
     pub voicevox_key: Option<String>,
     pub voicevox_original_api_url: Option<String>,
     pub otel_http_url: Option<String>,
+    pub klattersynth_api_url: Option<String>,
     #[serde(default)]
     pub readable_bot_ids: Vec<u64>,
     #[serde(default)]
@@ -170,6 +171,22 @@ fn parse_bool(name: &str, value: &str) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn existing_toml_uses_default_endpoint_and_accepts_override() {
+        let original =
+            "prefix = '!'\ntoken = 'test'\napplication_id = 1\nredis_url = 'redis://localhost/'\n";
+        let config: Config = toml::from_str(original).unwrap();
+        assert!(config.klattersynth_api_url.is_none());
+        let config: Config = toml::from_str(&format!(
+            "{original}klattersynth_api_url = 'http://tts:3000'\n"
+        ))
+        .unwrap();
+        assert_eq!(
+            config.klattersynth_api_url.as_deref(),
+            Some("http://tts:3000")
+        );
+    }
+
     fn config() -> Config {
         toml::from_str(
             "prefix = '!'\ntoken = 'test'\napplication_id = 42\nredis_url = 'redis://localhost'",

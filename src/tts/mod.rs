@@ -1,6 +1,7 @@
 pub mod gcp_tts;
 pub(crate) mod http;
 pub mod instance;
+pub mod klattersynth;
 pub mod message;
 pub(crate) mod notice;
 pub mod session;

@@ -1,13 +1,12 @@
 use serenity::{
     all::{
         ButtonStyle, CommandInteraction, CreateActionRow, CreateButton, CreateComponent,
-        CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu,
-        CreateSelectMenuKind, CreateSelectMenuOption,
+        CreateInteractionResponse, CreateInteractionResponseMessage,
     },
     prelude::Context,
 };
 
-use crate::{data::UserData, tts::tts_type::TTSType};
+use crate::{data::UserData, interactions::utils, tts::tts_type::TTSType};
 
 #[tracing::instrument(skip_all)]
 pub async fn config_command(
@@ -27,32 +26,7 @@ pub async fn config_command(
         .unwrap_or(TTSType::GCP)
         .available_or_default();
 
-    let engine_options = vec![
-        CreateSelectMenuOption::new("Google TTS", "TTS_CONFIG_ENGINE_SELECTED_GOOGLE")
-            .default_selection(tts_type == TTSType::GCP),
-        CreateSelectMenuOption::new("VOICEVOX", "TTS_CONFIG_ENGINE_SELECTED_VOICEVOX")
-            .default_selection(tts_type == TTSType::VOICEVOX),
-    ];
-
-    #[cfg(toriel_voice)]
-    let engine_options = {
-        let mut engine_options = engine_options;
-        engine_options.push(
-            CreateSelectMenuOption::new("Toriel", "TTS_CONFIG_ENGINE_SELECTED_TORIEL")
-                .default_selection(tts_type == TTSType::TORIEL),
-        );
-        engine_options
-    };
-
-    let engine_select = CreateActionRow::SelectMenu(
-        CreateSelectMenu::new(
-            "TTS_CONFIG_ENGINE",
-            CreateSelectMenuKind::String {
-                options: engine_options.into(),
-            },
-        )
-        .placeholder("読み上げAPIを選択"),
-    );
+    let engine_select = utils::build_tts_engine_select(tts_type);
 
     let voicevox_button = CreateActionRow::Buttons(
         vec![CreateButton::new("TTS_CONFIG_VOICEVOX")

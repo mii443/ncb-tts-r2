@@ -151,6 +151,7 @@ async fn gcp_service_retries_at_most_three_times_and_never_retries_bad_requests(
         let tts = TTS::new(
             VOICEVOX::for_test(server.url.clone(), None),
             GCPTTS::for_test(server.url.clone()),
+            super::klattersynth::KlattersynthTTS::new(None).unwrap(),
         )
         .with_cache_path(None);
         assert!(tts.synthesize_gcp(request()).await.is_err());
@@ -166,6 +167,7 @@ async fn gcp_transient_failure_recovers_to_playable_audio() {
     let tts = TTS::new(
         VOICEVOX::for_test(server.url.clone(), None),
         GCPTTS::for_test(server.url.clone()),
+        super::klattersynth::KlattersynthTTS::new(None).unwrap(),
     )
     .with_cache_path(None);
     let track = tts.synthesize_gcp(request()).await.unwrap();
@@ -187,6 +189,32 @@ async fn retry_budget_includes_a_hung_request() {
         started.elapsed(),
         Duration::from_secs(crate::errors::constants::TTS_TIMEOUT_SECS)
     );
+}
+
+#[tokio::test]
+async fn klattersynth_retries_transient_errors_but_not_invalid_requests() {
+    for (status, expected) in [(503, 3), (429, 3), (422, 1), (401, 1)] {
+        let server = Server::start(vec![
+            reply(status, "private-error-body"),
+            reply(status, "private-error-body"),
+            reply(status, "private-error-body"),
+        ])
+        .await;
+        let tts = TTS::new(
+            VOICEVOX::for_test(server.url.clone(), None),
+            GCPTTS::for_test(server.url.clone()),
+            super::klattersynth::KlattersynthTTS::new(Some(server.url.clone())).unwrap(),
+        )
+        .with_cache_path(None);
+        let error = tts
+            .synthesize_klattersynth("private-message-text")
+            .await
+            .err()
+            .expect("HTTP error must fail synthesis");
+        assert_eq!(server.count(), expected);
+        assert!(!format!("{error:?} {error}").contains("private-error-body"));
+        assert!(!format!("{error:?} {error}").contains("private-message-text"));
+    }
 }
 
 #[tokio::test]
@@ -213,6 +241,7 @@ async fn voicevox_key_stream_is_returned_as_a_playable_track() {
     let tts = TTS::new(
         VOICEVOX::for_test(api.url.clone(), None),
         GCPTTS::for_test(api.url.clone()),
+        super::klattersynth::KlattersynthTTS::new(None).unwrap(),
     )
     .with_cache_path(None);
     let track = tts.synthesize_voicevox("hello", 1).await.unwrap();

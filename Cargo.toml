@@ -1,6 +1,6 @@
 [package]
 name = "ncb-tts-r2"
-version = "1.16.3"
+version = "1.16.4"
 edition = "2021"
 
 [lib]
@@ -66,7 +66,7 @@ branch = "davey"
 
 [dependencies.symphonia]
 version = "0.5"
-features = ["mp3"]
+features = ["mp3", "wav", "pcm"]
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"
