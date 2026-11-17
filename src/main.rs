@@ -57,6 +57,7 @@ async fn run() -> Result<()> {
         tts_data: Arc::new(RwLock::new(HashMap::default())),
         tts_client: Arc::new(TTS::new(voicevox, tts, toriel)),
         database: Arc::new(database_client),
+        readable_bot_ids: config.readable_bot_ids.into_iter().collect(),
     };
 
     let token: Token = config.token.parse().map_err(|_| NCBError::config("Invalid Discord token"))?;
@@ -91,6 +92,20 @@ fn load_config() -> Result<Config> {
     let voicevox_key = env::var("NCB_VOICEVOX_KEY").ok();
     let voicevox_original_api_url = env::var("NCB_VOICEVOX_ORIGINAL_API_URL").ok();
     let otel_http_url = env::var("NCB_OTEL_HTTP_URL").ok();
+    let readable_bot_ids = env::var("NCB_READABLE_BOT_IDS")
+        .ok()
+        .map(|ids| {
+            ids.split(',')
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(|id| {
+                    id.parse::<u64>()
+                        .map_err(|_| NCBError::config(format!("Invalid bot ID: {}", id)))
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
 
     Ok(Config {
         token,
@@ -100,5 +115,6 @@ fn load_config() -> Result<Config> {
         voicevox_key,
         voicevox_original_api_url,
         otel_http_url,
+        readable_bot_ids,
     })
 }

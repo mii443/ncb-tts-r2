@@ -20,7 +20,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 WORKDIR /ncb-tts-r2
 
 # 非rootユーザーの作成

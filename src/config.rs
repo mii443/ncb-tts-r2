@@ -9,4 +9,6 @@ pub struct Config {
     pub voicevox_key: Option<String>,
     pub voicevox_original_api_url: Option<String>,
     pub otel_http_url: Option<String>,
+    #[serde(default)]
+    pub readable_bot_ids: Vec<u64>,
 }

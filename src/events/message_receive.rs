@@ -3,7 +3,9 @@ use serenity::{model::prelude::Message, model::id::ChannelId, prelude::Context};
 use crate::data::UserData;
 
 pub async fn message(ctx: &Context, message: &Message) {
-    if message.author.bot() {
+    let user_data = ctx.data::<UserData>();
+
+    if message.author.bot() && !user_data.readable_bot_ids.contains(&message.author.id.get()) {
         return;
     }
 
@@ -15,7 +17,7 @@ pub async fn message(ctx: &Context, message: &Message) {
 
     let guild_id = guild_id.unwrap().id;
 
-    let storage_lock = ctx.data::<UserData>().tts_data.clone();
+    let storage_lock = user_data.tts_data.clone();
 
     {
         let mut storage = storage_lock.write().await;

@@ -5,11 +5,12 @@ use serenity::{
 };
 
 use crate::tts::instance::TTSInstance;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
 pub struct UserData {
     pub songbird: Arc<songbird::Songbird>,
     pub tts_data: Arc<RwLock<HashMap<GuildId, TTSInstance>>>,
     pub tts_client: Arc<TTS>,
     pub database: Arc<Database>,
+    pub readable_bot_ids: HashSet<u64>,
 }

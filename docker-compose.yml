@@ -14,7 +14,7 @@ services:
     - ./credentials.json:/ncb-tts-r2/credentials.json:ro
   redis:
     container_name: redis
-    image: redis:latest
+    image: redis:8.10.3-alpine@sha256:896f241f438ab6a210cfb24f573b84bea721a4cbe67f1b4fd07eb638b3b02a7b
     ports:
     - "6379:6379"
   voicevox_engine:
