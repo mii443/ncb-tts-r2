@@ -34,7 +34,7 @@ pub fn build_tts_engine_select(selected: TTSType) -> CreateActionRow<'static> {
             TTSType::TORIEL,
         ),
         (
-            "Klattesynth",
+            "Klattersynth",
             "TTS_CONFIG_ENGINE_SELECTED_KLATTERSYNTH",
             TTSType::KLATTERSYNTH,
         ),
@@ -284,7 +284,7 @@ mod tts_engine_tests {
             );
             assert!(options
                 .iter()
-                .any(|option| option["label"] == "Klattesynth"));
+                .any(|option| option["label"] == "Klattersynth"));
             let defaults: Vec<_> = options
                 .iter()
                 .filter(|option| option["default"] == true)
