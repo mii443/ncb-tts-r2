@@ -16,7 +16,7 @@ impl VoiceMoveStateTrait for VoiceState {
         let new = self;
 
         if let None = old.clone() {
-            return if target_channel == new.channel_id.unwrap() {
+            return if Some(target_channel) == new.channel_id {
                 VoiceMoveState::JOIN
             } else {
                 VoiceMoveState::NONE

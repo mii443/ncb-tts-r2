@@ -35,7 +35,8 @@ async fn show_voicevox_page(
 ) -> Result<()> {
     let data = ctx.data::<UserData>();
 
-    let config = data.database
+    let config = data
+        .database
         .get_user_config_or_default(interaction.user.id.get())
         .await
         .map_err(|e| NCBError::database(format!("Failed to get user config: {}", e)))?
@@ -78,9 +79,15 @@ async fn show_voicevox_page(
     components.push(CreateComponent::ActionRow(CreateActionRow::SelectMenu(
         CreateSelectMenu::new(
             format!("TTS_CONFIG_VOICEVOX_SPEAKER_PAGE_{}", current_page),
-            CreateSelectMenuKind::String { options: options.into() },
+            CreateSelectMenuKind::String {
+                options: options.into(),
+            },
         )
-        .placeholder(format!("VOICEVOX Speaker (Page {}/{})", current_page + 1, total_pages)),
+        .placeholder(format!(
+            "VOICEVOX Speaker (Page {}/{})",
+            current_page + 1,
+            total_pages
+        )),
     )));
 
     let mut pagination_buttons = Vec::new();
@@ -109,14 +116,17 @@ async fn show_voicevox_page(
     }
 
     if pagination_buttons.len() > 1 {
-        components.push(CreateComponent::ActionRow(CreateActionRow::Buttons(pagination_buttons.into())));
+        components.push(CreateComponent::ActionRow(CreateActionRow::Buttons(
+            pagination_buttons.into(),
+        )));
     }
 
-    components.push(CreateComponent::ActionRow(CreateActionRow::Buttons(vec![CreateButton::new(
-        TTS_CONFIG_BACK_TO_MAIN,
-    )
-    .label("設定に戻る")
-    .style(ButtonStyle::Secondary)].into())));
+    components.push(CreateComponent::ActionRow(CreateActionRow::Buttons(
+        vec![CreateButton::new(TTS_CONFIG_BACK_TO_MAIN)
+            .label("設定に戻る")
+            .style(ButtonStyle::Secondary)]
+        .into(),
+    )));
 
     interaction
         .create_response(

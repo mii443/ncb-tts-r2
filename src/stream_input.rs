@@ -8,11 +8,17 @@ use songbird::input::{
     AsyncAdapterStream, AsyncReadOnlySource, AudioStream, AudioStreamError, Compose, Input,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Mp3Request {
     client: Client,
     request: String,
     headers: HeaderMap,
+}
+
+impl std::fmt::Debug for Mp3Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mp3Request").finish_non_exhaustive()
+    }
 }
 
 impl Mp3Request {
@@ -36,13 +42,13 @@ impl Mp3Request {
             .get(&self.request)
             .headers(self.headers.clone())
             .build()
-            .map_err(|why| AudioStreamError::Fail(why.into()))?;
+            .map_err(|why| AudioStreamError::Fail(why.without_url().into()))?;
 
         let response = self
             .client
             .execute(request)
             .await
-            .map_err(|why| AudioStreamError::Fail(why.into()))?;
+            .map_err(|why| AudioStreamError::Fail(why.without_url().into()))?;
 
         if !response.status().is_success() {
             return Err(AudioStreamError::Fail(
@@ -52,7 +58,7 @@ impl Mp3Request {
 
         let byte_stream = response
             .bytes_stream()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()));
+            .map_err(|e| std::io::Error::other(e.without_url().to_string()));
 
         let tokio_reader = byte_stream.into_async_read().compat();
 

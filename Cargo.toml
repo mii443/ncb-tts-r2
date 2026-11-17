@@ -1,6 +1,6 @@
 [package]
 name = "ncb-tts-r2"
-version = "1.11.2"
+version = "1.16.3"
 edition = "2021"
 
 [lib]
@@ -13,7 +13,16 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["transcription", "web-ui"]
+transcription = ["songbird/receive", "dep:tokio-tungstenite"]
+web-ui = ["transcription", "dep:axum", "dep:hmac", "dep:sha2"]
+
 [dependencies]
+axum = { version = "0.8", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
 serde_json = "1.0"
 serde = "1.0"
 toml = "0.8.19"
@@ -38,7 +47,7 @@ opentelemetry-otlp = { version = "0.29.0", features = ["grpc-tonic"] }
 opentelemetry-stdout = "0.29.0"
 tracing-opentelemetry = "0.30.0"
 symphonia-core = "0.5.4"
-tokio-util = { version = "0.7.14", features = ["compat"] }
+tokio-util = { version = "0.7.14", features = ["compat", "rt"] }
 futures = "0.3.31"
 bytes = "1.10.1"
 voicevox-client = { git = "https://github.com/mii443/rust" }
@@ -76,13 +85,14 @@ features = [
 
 [dependencies.tokio]
 version = "1.0"
-features = ["macros", "rt-multi-thread"]
+features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "signal"]
 
 [patch."https://github.com/serenity-rs/serenity".serenity]
 git = "https://github.com/GnomedDev/serenity"
 branch = "revert-shardmanager-rework"
 
 [dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
 tokio-test = "0.4"
 mockall = "0.12"
 tempfile = "3.8"

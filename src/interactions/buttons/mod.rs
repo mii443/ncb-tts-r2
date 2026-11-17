@@ -35,9 +35,7 @@ pub async fn handle_button(ctx: &Context, interaction: &ComponentInteraction) ->
 
         // Navigation
         TTS_CONFIG_SERVER => navigation::handle_show_server_config(ctx, interaction).await,
-        TTS_CONFIG_SERVER_BACK => {
-            navigation::handle_back_to_server_config(ctx, interaction).await
-        }
+        TTS_CONFIG_SERVER_BACK => navigation::handle_back_to_server_config(ctx, interaction).await,
         TTS_CONFIG_SERVER_DICTIONARY => {
             navigation::handle_show_dictionary_menu(ctx, interaction).await
         }

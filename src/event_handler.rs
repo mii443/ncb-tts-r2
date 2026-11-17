@@ -1,7 +1,7 @@
 use crate::{errors::NCBError, events, interactions};
 use serenity::{
     async_trait,
-    model::{application::Interaction, channel::Message, gateway::Ready, voice::VoiceState},
+    model::application::Interaction,
     prelude::{Context, EventHandler},
 };
 
@@ -22,7 +22,14 @@ impl EventHandler for Handler {
             }
             FullEvent::InteractionCreate { interaction } => {
                 if let Err(e) = interactions::handle_interaction(ctx, interaction).await {
-                    tracing::error!("Error handling interaction: {}", e);
+                    let command = interaction.as_command();
+                    tracing::error!(
+                        guild_id = ?interaction.guild_id(),
+                        command = command.map(|command| command.data.name.as_str()),
+                        channel_id = ?command.map(|command| command.channel_id),
+                        error = %e,
+                        "Error handling interaction"
+                    );
                     if let Err(response_err) = self.send_error_response(ctx, interaction, &e).await
                     {
                         tracing::error!("Failed to send error response: {}", response_err);
@@ -30,6 +37,10 @@ impl EventHandler for Handler {
                 }
             }
             FullEvent::VoiceStateUpdate { old, new } => {
+                #[cfg(feature = "transcription")]
+                if let Some(service) = &ctx.data::<crate::data::UserData>().transcription {
+                    service.voice_state_update(ctx, new).await;
+                }
                 events::voice_state_update::voice_state_update(ctx, old.clone(), new.clone()).await;
             }
             _ => {}
@@ -50,21 +61,32 @@ impl Handler {
             NCBError::InvalidInput(msg) => format!("入力エラー: {}", msg),
             NCBError::Database(_) => "データベースエラーが発生しました".to_string(),
             NCBError::Config(msg) => format!("設定エラー: {}", msg),
+            NCBError::UserNotInVoiceChannel => {
+                "ボイスチャンネルに参加してから実行してください。".to_string()
+            }
+            NCBError::GuildNotFound => "このコマンドはサーバーでのみ使用可能です。".to_string(),
             _ => "予期しないエラーが発生しました".to_string(),
         };
 
         match interaction {
             Interaction::Command(cmd) => {
-                cmd.create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content(error_message)
-                            .ephemeral(true),
-                    ),
-                )
-                .await
-                .map_err(|e| NCBError::Discord(e))?;
+                let result = cmd
+                    .create_response(
+                        &ctx.http,
+                        CreateInteractionResponse::Message(
+                            CreateInteractionResponseMessage::new()
+                                .content(error_message.clone())
+                                .ephemeral(true),
+                        ),
+                    )
+                    .await;
+                if result.is_err() {
+                    cmd.edit_response(
+                        &ctx.http,
+                        serenity::all::EditInteractionResponse::new().content(error_message),
+                    )
+                    .await?;
+                }
             }
             Interaction::Component(comp) => {
                 comp.create_response(

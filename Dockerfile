@@ -1,4 +1,6 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+# syntax=docker/dockerfile:1.7
+
+FROM lukemathwalker/cargo-chef:0.1.77-rust-1.95.0-slim-bookworm@sha256:e570dfdde51ef616090dd76469dc709679a39d460d76a960717459ad324297f8 AS chef
 WORKDIR /app
 
 FROM chef AS planner
@@ -6,40 +8,45 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
+# Empty string builds TTS only; transcription omits the Web UI.
+ARG CARGO_FEATURES="transcription,web-ui"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ffmpeg \
     libssl-dev \
     pkg-config \
     libopus-dev \
-    gcc && \
+    gcc \
+    make \
+    file && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-RUN cargo chef cook --release --recipe-path recipe.json
+COPY --from=planner /app/recipe.json recipe.json
+# Warm both production and test feature sets before copying application sources.
+# Tests enable dev-dependencies (e.g. tokio/test-util), rebuilding their consumers
+# unless that second dependency graph is also part of the cached recipe layer.
+RUN cargo chef cook --release --locked --no-default-features --features "$CARGO_FEATURES" --recipe-path recipe.json && \
+    cargo chef cook --release --locked --no-default-features --features "$CARGO_FEATURES" --all-targets --recipe-path recipe.json
 COPY . .
-RUN cargo build --release
+RUN cargo test --release --locked --no-default-features --features "$CARGO_FEATURES" --all-targets
+RUN cargo build --release --locked --no-default-features --features "$CARGO_FEATURES"
 
-FROM ubuntu:24.04 AS runtime
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS runtime
 WORKDIR /ncb-tts-r2
 
-# 非rootユーザーの作成
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    openssl \
-    ca-certificates \
-    ffmpeg \
-    libssl-dev \
-    libopus-dev && \
+        ca-certificates \
+        ffmpeg \
+        libssl3 \
+        libopus0 && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    chown appuser:appgroup /ncb-tts-r2
 
 COPY --from=builder /app/target/release/ncb-tts-r2 /usr/local/bin/ncb-tts-r2
-RUN chmod +x /usr/local/bin/ncb-tts-r2
 
-# 非rootユーザーに切り替え
 USER appuser
 
 ENTRYPOINT ["/usr/local/bin/ncb-tts-r2"]
